@@ -53,6 +53,7 @@ export function HistoryView({ param, go }) {
                     ${ch.omitidos ? html`<span class="chip warn">${ch.omitidos} omitido${ch.omitidos > 1 ? 's' : ''}</span>` : null}
                     ${ch.agregados ? html`<span class="chip good">${ch.agregados} agregado${ch.agregados > 1 ? 's' : ''}</span>` : null}
                     ${s.editLog?.length ? html`<span class="chip">Corregida</span>` : null}
+                    ${s.lugar === 'freeletics' ? html`<span class="chip">Freeletics</span>` : null}
                   </div>
                 </div>
                 <${Icon} name="chevron" />

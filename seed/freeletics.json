@@ -1,0 +1,958 @@
+[
+ {
+  "id": "fl-pushups",
+  "name": "Pushups",
+  "nombreEs": "Flexiones",
+  "grupo": "Empuje",
+  "primary": [
+   "pecho"
+  ],
+  "secondary": [
+   "triceps",
+   "deltoide_ant",
+   "abdomen"
+  ],
+  "medida": "reps",
+  "unilateral": false,
+  "knee": "ok",
+  "back": "ok",
+  "cues": "",
+  "equipment": "Peso corporal",
+  "modalidad": "freeletics",
+  "categoria": "fuerza",
+  "prompt": "push-up on the floor, body straight, arms extended",
+  "highlight": "chest, triceps, front shoulders",
+  "view": "Side view"
+ },
+ {
+  "id": "fl-negative-pushups",
+  "name": "Negative Pushups",
+  "nombreEs": "Flexiones negativas",
+  "grupo": "Empuje",
+  "primary": [
+   "pecho"
+  ],
+  "secondary": [
+   "triceps",
+   "deltoide_ant"
+  ],
+  "medida": "reps",
+  "unilateral": false,
+  "knee": "ok",
+  "back": "ok",
+  "cues": "Bajar lento (3–4 s) con el cuerpo recto; subir apoyando rodillas si hace falta.",
+  "equipment": "Peso corporal",
+  "modalidad": "freeletics",
+  "categoria": "fuerza",
+  "prompt": "push-up slowly lowering the chest toward the floor, body straight, elbows bending",
+  "highlight": "chest, triceps, front shoulders",
+  "view": "Side view"
+ },
+ {
+  "id": "fl-pike",
+  "name": "Pike Pushups",
+  "nombreEs": "Flexiones en pica",
+  "grupo": "Empuje",
+  "primary": [
+   "deltoide_ant"
+  ],
+  "secondary": [
+   "triceps",
+   "trapecio"
+  ],
+  "medida": "reps",
+  "unilateral": false,
+  "knee": "ok",
+  "back": "ok",
+  "cues": "Rango corto y sin dolor de hombro.",
+  "equipment": "Peso corporal",
+  "modalidad": "freeletics",
+  "categoria": "fuerza",
+  "prompt": "pike push-up, hips high in an inverted V, bending the elbows to lower the head toward the floor",
+  "highlight": "shoulders, triceps",
+  "view": "Side view"
+ },
+ {
+  "id": "fl-dead-bug",
+  "name": "Dead Bug",
+  "nombreEs": "Dead bug",
+  "grupo": "Core antiextensión",
+  "primary": [
+   "abdomen"
+  ],
+  "secondary": [],
+  "medida": "reps",
+  "unilateral": true,
+  "knee": "ok",
+  "back": "ok",
+  "cues": "Lumbar pegada al suelo durante todo el movimiento.",
+  "equipment": "Peso corporal",
+  "modalidad": "freeletics",
+  "categoria": "fuerza",
+  "prompt": "dead bug lying on the back, one arm extended overhead and the opposite leg extended, other limbs at 90 degrees",
+  "highlight": "abs",
+  "view": "Side view"
+ },
+ {
+  "id": "fl-plank-hold",
+  "name": "Plank Hold",
+  "nombreEs": "Plancha",
+  "grupo": "Core antiextensión",
+  "primary": [
+   "abdomen"
+  ],
+  "secondary": [
+   "oblicuos"
+  ],
+  "medida": "tiempo",
+  "unilateral": false,
+  "knee": "ok",
+  "back": "ok",
+  "cues": "Glúteos apretados, pelvis neutra, respirar.",
+  "equipment": "Peso corporal",
+  "modalidad": "freeletics",
+  "categoria": "fuerza",
+  "prompt": "forearm plank on a mat, body in a straight line from head to heels",
+  "highlight": "abs, obliques",
+  "view": "Side view"
+ },
+ {
+  "id": "fl-high-plank-hold",
+  "name": "High Plank Hold",
+  "nombreEs": "Plancha alta",
+  "grupo": "Core antiextensión",
+  "primary": [
+   "abdomen"
+  ],
+  "secondary": [
+   "deltoide_ant",
+   "oblicuos"
+  ],
+  "medida": "tiempo",
+  "unilateral": false,
+  "knee": "ok",
+  "back": "ok",
+  "cues": "Manos bajo los hombros, cuerpo recto.",
+  "equipment": "Peso corporal",
+  "modalidad": "freeletics",
+  "categoria": "fuerza",
+  "prompt": "high plank on straight arms, hands under the shoulders, body straight",
+  "highlight": "abs, front shoulders",
+  "view": "Side view"
+ },
+ {
+  "id": "fl-plank-leg-lifts",
+  "name": "Plank Leg Lifts",
+  "nombreEs": "Plancha con elevación de pierna",
+  "grupo": "Core antiextensión",
+  "primary": [
+   "abdomen"
+  ],
+  "secondary": [
+   "gluteos"
+  ],
+  "medida": "reps",
+  "unilateral": true,
+  "knee": "ok",
+  "back": "ok",
+  "cues": "Elevar la pierna sin rotar la pelvis.",
+  "equipment": "Peso corporal",
+  "modalidad": "freeletics",
+  "categoria": "fuerza",
+  "prompt": "forearm plank lifting one straight leg up behind",
+  "highlight": "abs, glutes",
+  "view": "Side view"
+ },
+ {
+  "id": "fl-plank-knees-to-chest",
+  "name": "Plank Knees to Chest",
+  "nombreEs": "Plancha rodilla al pecho",
+  "grupo": "Core antiextensión",
+  "primary": [
+   "abdomen"
+  ],
+  "secondary": [
+   "oblicuos"
+  ],
+  "medida": "reps",
+  "unilateral": false,
+  "knee": "ok",
+  "back": "precaucion",
+  "cues": "Sin hundir la lumbar; movimiento controlado.",
+  "equipment": "Peso corporal",
+  "modalidad": "freeletics",
+  "categoria": "fuerza",
+  "prompt": "high plank bringing one knee toward the chest",
+  "highlight": "abs, obliques",
+  "view": "Side view"
+ },
+ {
+  "id": "fl-plank-shoulder-taps",
+  "name": "Plank Shoulder Taps",
+  "nombreEs": "Plancha con toque de hombro",
+  "grupo": "Core y estabilidad de hombro",
+  "primary": [
+   "abdomen",
+   "oblicuos"
+  ],
+  "secondary": [
+   "deltoide_ant"
+  ],
+  "medida": "reps",
+  "unilateral": false,
+  "knee": "ok",
+  "back": "ok",
+  "cues": "Pies separados; la cadera no se balancea.",
+  "equipment": "Peso corporal",
+  "modalidad": "freeletics",
+  "categoria": "fuerza",
+  "prompt": "high plank touching the opposite shoulder with one hand, hips level",
+  "highlight": "abs, obliques, shoulders",
+  "view": "Three-quarter front view"
+ },
+ {
+  "id": "fl-plank-switches",
+  "name": "Plank Switches",
+  "nombreEs": "Plancha alternando apoyos",
+  "grupo": "Core y estabilidad de hombro",
+  "primary": [
+   "abdomen"
+  ],
+  "secondary": [
+   "deltoide_ant",
+   "triceps"
+  ],
+  "medida": "reps",
+  "unilateral": false,
+  "knee": "ok",
+  "back": "precaucion",
+  "cues": "Sin impulso: cambiar de antebrazo a mano de a uno.",
+  "equipment": "Peso corporal",
+  "modalidad": "freeletics",
+  "categoria": "fuerza",
+  "prompt": "moving from forearm plank up to high plank one arm at a time",
+  "highlight": "abs, shoulders, triceps",
+  "view": "Side view"
+ },
+ {
+  "id": "fl-side-plank-hold",
+  "name": "Side Plank Hold",
+  "nombreEs": "Plancha lateral",
+  "grupo": "Core lateral",
+  "primary": [
+   "oblicuos"
+  ],
+  "secondary": [
+   "abductores"
+  ],
+  "medida": "tiempo",
+  "unilateral": true,
+  "knee": "ok",
+  "back": "ok",
+  "cues": "Cadera alta, cuerpo en línea.",
+  "equipment": "Peso corporal",
+  "modalidad": "freeletics",
+  "categoria": "fuerza",
+  "prompt": "side plank on one forearm, body in a straight line, hips lifted",
+  "highlight": "obliques, outer hip",
+  "view": "Front view"
+ },
+ {
+  "id": "fl-modified-side-plank",
+  "name": "Modified Side Plank",
+  "nombreEs": "Plancha lateral modificada",
+  "grupo": "Core lateral",
+  "primary": [
+   "oblicuos"
+  ],
+  "secondary": [],
+  "medida": "tiempo",
+  "unilateral": true,
+  "knee": "ok",
+  "back": "ok",
+  "cues": "Rodillas apoyadas para reducir carga.",
+  "equipment": "Peso corporal",
+  "modalidad": "freeletics",
+  "categoria": "fuerza",
+  "prompt": "modified side plank on one forearm with knees bent and resting on the floor, hips lifted",
+  "highlight": "obliques",
+  "view": "Front view"
+ },
+ {
+  "id": "fl-side-dips",
+  "name": "Side Dips",
+  "nombreEs": "Descensos laterales de cadera",
+  "grupo": "Core lateral",
+  "primary": [
+   "oblicuos"
+  ],
+  "secondary": [],
+  "medida": "reps",
+  "unilateral": true,
+  "knee": "ok",
+  "back": "precaucion",
+  "cues": "Flexión lateral con carga: rango corto y controlado.",
+  "equipment": "Peso corporal",
+  "modalidad": "freeletics",
+  "categoria": "fuerza",
+  "prompt": "side plank on one forearm, lowering and raising the hips",
+  "highlight": "obliques",
+  "view": "Front view"
+ },
+ {
+  "id": "fl-hip-raises",
+  "name": "Hip Raises",
+  "nombreEs": "Puente de glúteo",
+  "grupo": "Glúteo y cadena posterior",
+  "primary": [
+   "gluteos"
+  ],
+  "secondary": [
+   "isquios"
+  ],
+  "medida": "reps",
+  "unilateral": false,
+  "knee": "ok",
+  "back": "ok",
+  "cues": "Lumbar neutra; extender la cadera sin arquear.",
+  "equipment": "Peso corporal",
+  "modalidad": "freeletics",
+  "categoria": "fuerza",
+  "prompt": "glute bridge lying on the back, knees bent, hips lifted so the body is straight from shoulders to knees",
+  "highlight": "glutes, hamstrings",
+  "view": "Side view"
+ },
+ {
+  "id": "fl-single-leg-hip-raises",
+  "name": "Single Leg Hip Raises",
+  "nombreEs": "Puente a una pierna",
+  "grupo": "Glúteo y cadena posterior",
+  "primary": [
+   "gluteos"
+  ],
+  "secondary": [
+   "isquios"
+  ],
+  "medida": "reps",
+  "unilateral": true,
+  "knee": "ok",
+  "back": "ok",
+  "cues": "Pelvis nivelada.",
+  "equipment": "Peso corporal",
+  "modalidad": "freeletics",
+  "categoria": "fuerza",
+  "prompt": "single leg glute bridge lying on the back, one leg extended in the air, hips lifted",
+  "highlight": "glutes, hamstrings",
+  "view": "Side view"
+ },
+ {
+  "id": "fl-shoulder-bridge-leg-raises",
+  "name": "Shoulder Bridge Leg Raises",
+  "nombreEs": "Puente con elevación de pierna",
+  "grupo": "Glúteo y cadena posterior",
+  "primary": [
+   "gluteos"
+  ],
+  "secondary": [
+   "isquios",
+   "abdomen"
+  ],
+  "medida": "reps",
+  "unilateral": true,
+  "knee": "ok",
+  "back": "ok",
+  "cues": "Mantener la cadera arriba mientras sube la pierna.",
+  "equipment": "Peso corporal",
+  "modalidad": "freeletics",
+  "categoria": "fuerza",
+  "prompt": "holding a glute bridge while raising one straight leg toward the ceiling",
+  "highlight": "glutes, hamstrings",
+  "view": "Side view"
+ },
+ {
+  "id": "fl-arm-leg-lifts",
+  "name": "Arm & Leg Lifts",
+  "nombreEs": "Elevación de brazo y pierna",
+  "grupo": "Glúteo y cadena posterior",
+  "primary": [
+   "lumbar",
+   "gluteos"
+  ],
+  "secondary": [
+   "deltoide_post",
+   "abdomen"
+  ],
+  "medida": "reps",
+  "unilateral": true,
+  "knee": "precaucion",
+  "back": "ok",
+  "cues": "Lumbar neutra; cojín bajo la rodilla si está en cuadrupedia.",
+  "equipment": "Peso corporal",
+  "modalidad": "freeletics",
+  "categoria": "fuerza",
+  "prompt": "on hands and knees on a mat, extending one arm forward and the opposite leg back in a straight line",
+  "highlight": "lower back, glutes",
+  "view": "Side view"
+ },
+ {
+  "id": "fl-heel-raises",
+  "name": "Heel Raises",
+  "nombreEs": "Elevación de talones a una pierna",
+  "grupo": "Glúteo y cadena posterior",
+  "primary": [
+   "pantorrillas"
+  ],
+  "secondary": [
+   "gluteos"
+  ],
+  "medida": "reps",
+  "unilateral": true,
+  "knee": "ok",
+  "back": "ok",
+  "cues": "Subir y bajar lento, con apoyo en la pared.",
+  "equipment": "Peso corporal",
+  "modalidad": "freeletics",
+  "categoria": "fuerza",
+  "prompt": "single leg calf raise standing on one foot, holding a wall for balance, heel lifted",
+  "highlight": "calves",
+  "view": "Side view"
+ },
+ {
+  "id": "fl-standing-scales",
+  "name": "Standing Scales",
+  "nombreEs": "Balanza de pie",
+  "grupo": "Glúteo y cadena posterior",
+  "primary": [
+   "isquios",
+   "gluteos"
+  ],
+  "secondary": [
+   "abductores",
+   "lumbar"
+  ],
+  "medida": "reps",
+  "unilateral": true,
+  "knee": "precaucion",
+  "back": "precaucion",
+  "cues": "Bisagra unilateral: controla la lumbar y la rodilla de apoyo.",
+  "equipment": "Peso corporal",
+  "modalidad": "freeletics",
+  "categoria": "fuerza",
+  "prompt": "standing scale balance, hinging forward on one leg with the other leg extended back and arms forward, body in a T",
+  "highlight": "hamstrings, glutes",
+  "view": "Side view"
+ },
+ {
+  "id": "fl-calf-raises",
+  "name": "Calf Raises",
+  "nombreEs": "Elevación de talones",
+  "grupo": "Pierna y gemelo",
+  "primary": [
+   "pantorrillas"
+  ],
+  "secondary": [],
+  "medida": "reps",
+  "unilateral": false,
+  "knee": "ok",
+  "back": "ok",
+  "cues": "Pausa arriba, bajar lento.",
+  "equipment": "Peso corporal",
+  "modalidad": "freeletics",
+  "categoria": "fuerza",
+  "prompt": "standing calf raise on both feet, heels lifted high",
+  "highlight": "calves",
+  "view": "Side view"
+ },
+ {
+  "id": "fl-knee-lifts",
+  "name": "Knee Lifts",
+  "nombreEs": "Elevación de rodillas",
+  "grupo": "Pierna y gemelo",
+  "primary": [
+   "abdomen"
+  ],
+  "secondary": [
+   "cuadriceps"
+  ],
+  "medida": "reps",
+  "unilateral": false,
+  "knee": "ok",
+  "back": "ok",
+  "cues": "Tronco erguido, sin impacto.",
+  "equipment": "Peso corporal",
+  "modalidad": "freeletics",
+  "categoria": "fuerza",
+  "prompt": "standing marching knee lift, raising one knee to hip height",
+  "highlight": "abs, hip flexors, quadriceps",
+  "view": "Side view"
+ },
+ {
+  "id": "fl-knee-kick",
+  "name": "Knee Kick",
+  "nombreEs": "Patada de rodilla",
+  "grupo": "Pierna y gemelo",
+  "primary": [
+   "cuadriceps"
+  ],
+  "secondary": [
+   "abdomen"
+  ],
+  "medida": "reps",
+  "unilateral": true,
+  "knee": "ok",
+  "back": "ok",
+  "cues": "Controlada, sin bloquear la rodilla.",
+  "equipment": "Peso corporal",
+  "modalidad": "freeletics",
+  "categoria": "fuerza",
+  "prompt": "standing, lifting one knee and extending the lower leg forward in a controlled kick",
+  "highlight": "quadriceps, abs",
+  "view": "Side view"
+ },
+ {
+  "id": "fl-wall-sit",
+  "name": "Wall Sit",
+  "nombreEs": "Sentadilla isométrica en pared",
+  "grupo": "Pierna y gemelo",
+  "primary": [
+   "cuadriceps"
+  ],
+  "secondary": [
+   "gluteos"
+  ],
+  "medida": "tiempo",
+  "unilateral": false,
+  "knee": "precaucion",
+  "back": "ok",
+  "cues": "Rodillas hasta ~90° como máximo.",
+  "equipment": "Peso corporal",
+  "modalidad": "freeletics",
+  "categoria": "fuerza",
+  "prompt": "wall sit with the back flat against a wall, knees bent at 90 degrees",
+  "highlight": "quadriceps, glutes",
+  "view": "Side view"
+ },
+ {
+  "id": "fl-wall-squats",
+  "name": "Wall Squats",
+  "nombreEs": "Sentadilla en pared",
+  "grupo": "Pierna y gemelo",
+  "primary": [
+   "cuadriceps",
+   "gluteos"
+  ],
+  "secondary": [],
+  "medida": "reps",
+  "unilateral": false,
+  "knee": "precaucion",
+  "back": "ok",
+  "cues": "Deslizar por la pared sin pasar de 90° de rodilla.",
+  "equipment": "Peso corporal",
+  "modalidad": "freeletics",
+  "categoria": "fuerza",
+  "prompt": "wall squat sliding down a wall with the back against it, knees bending toward 90 degrees",
+  "highlight": "quadriceps, glutes",
+  "view": "Side view"
+ },
+ {
+  "id": "fl-assisted-squats",
+  "name": "Assisted Squats",
+  "nombreEs": "Sentadilla asistida",
+  "grupo": "Pierna y gemelo",
+  "primary": [
+   "cuadriceps",
+   "gluteos"
+  ],
+  "secondary": [],
+  "medida": "reps",
+  "unilateral": false,
+  "knee": "precaucion",
+  "back": "ok",
+  "cues": "Agarrado a un apoyo, rango limitado y sin dolor.",
+  "equipment": "Peso corporal",
+  "modalidad": "freeletics",
+  "categoria": "fuerza",
+  "prompt": "assisted bodyweight squat holding a door frame or pole for support, thighs not below parallel",
+  "highlight": "quadriceps, glutes",
+  "view": "Side view"
+ },
+ {
+  "id": "fl-reverse-lunges",
+  "name": "Reverse Lunges",
+  "nombreEs": "Zancada hacia atrás",
+  "grupo": "Pierna y gemelo",
+  "primary": [
+   "cuadriceps",
+   "gluteos"
+  ],
+  "secondary": [
+   "isquios"
+  ],
+  "medida": "reps",
+  "unilateral": true,
+  "knee": "precaucion",
+  "back": "ok",
+  "cues": "Sin pivote, rango cómodo; la rodilla de atrás no golpea el piso.",
+  "equipment": "Peso corporal",
+  "modalidad": "freeletics",
+  "categoria": "fuerza",
+  "prompt": "reverse lunge stepping one leg back, both knees bent, torso upright",
+  "highlight": "quadriceps, glutes",
+  "view": "Side view"
+ },
+ {
+  "id": "fl-assisted-lunges",
+  "name": "Assisted Lunges",
+  "nombreEs": "Zancada asistida",
+  "grupo": "Pierna y gemelo",
+  "primary": [
+   "cuadriceps",
+   "gluteos"
+  ],
+  "secondary": [
+   "isquios"
+  ],
+  "medida": "reps",
+  "unilateral": true,
+  "knee": "precaucion",
+  "back": "ok",
+  "cues": "Con apoyo de una mano; sin pivote, rango cómodo.",
+  "equipment": "Peso corporal",
+  "modalidad": "freeletics",
+  "categoria": "fuerza",
+  "prompt": "split squat lunge holding a chair for support, torso upright",
+  "highlight": "quadriceps, glutes",
+  "view": "Side view"
+ },
+ {
+  "id": "fl-cat-cow",
+  "name": "Cat-Cow",
+  "nombreEs": "Gato-vaca",
+  "grupo": "Movilidad y estiramientos",
+  "primary": [
+   "lumbar"
+  ],
+  "secondary": [
+   "espalda_media"
+  ],
+  "medida": "reps",
+  "unilateral": false,
+  "knee": "precaucion",
+  "back": "ok",
+  "cues": "Cojín bajo las rodillas; movimiento suave.",
+  "equipment": "Peso corporal",
+  "modalidad": "freeletics",
+  "categoria": "movilidad",
+  "prompt": "cat cow mobility on hands and knees, rounding the back up like a cat",
+  "highlight": "lower back, mid back",
+  "view": "Side view"
+ },
+ {
+  "id": "fl-shoulder-warmup",
+  "name": "Shoulder Warmup",
+  "nombreEs": "Calentamiento de hombros",
+  "grupo": "Movilidad y estiramientos",
+  "primary": [
+   "deltoide_lat"
+  ],
+  "secondary": [
+   "deltoide_ant",
+   "deltoide_post"
+  ],
+  "medida": "reps",
+  "unilateral": false,
+  "knee": "ok",
+  "back": "ok",
+  "cues": "",
+  "equipment": "Peso corporal",
+  "modalidad": "freeletics",
+  "categoria": "movilidad",
+  "prompt": "standing arm circles, arms extended out to the sides",
+  "highlight": "shoulders",
+  "view": "Front view"
+ },
+ {
+  "id": "fl-hip-circles",
+  "name": "Hip Circles",
+  "nombreEs": "Círculos de cadera",
+  "grupo": "Movilidad y estiramientos",
+  "primary": [
+   "gluteos"
+  ],
+  "secondary": [
+   "abductores"
+  ],
+  "medida": "reps",
+  "unilateral": false,
+  "knee": "ok",
+  "back": "ok",
+  "cues": "",
+  "equipment": "Peso corporal",
+  "modalidad": "freeletics",
+  "categoria": "movilidad",
+  "prompt": "standing hip circles, hands on hips, rotating the pelvis",
+  "highlight": "hips, glutes",
+  "view": "Front view"
+ },
+ {
+  "id": "fl-ankle-circles",
+  "name": "Ankle Circles",
+  "nombreEs": "Círculos de tobillo",
+  "grupo": "Movilidad y estiramientos",
+  "primary": [
+   "pantorrillas"
+  ],
+  "secondary": [],
+  "medida": "reps",
+  "unilateral": true,
+  "knee": "ok",
+  "back": "ok",
+  "cues": "",
+  "equipment": "Peso corporal",
+  "modalidad": "freeletics",
+  "categoria": "movilidad",
+  "prompt": "standing on one leg rotating the other ankle in circles, toe touching the floor",
+  "highlight": "calves, ankle",
+  "view": "Front view"
+ },
+ {
+  "id": "fl-shoulder-triceps-stretch",
+  "name": "Shoulder & Triceps Stretch",
+  "nombreEs": "Estiramiento de hombro y tríceps",
+  "grupo": "Movilidad y estiramientos",
+  "primary": [
+   "triceps"
+  ],
+  "secondary": [
+   "deltoide_post"
+  ],
+  "medida": "tiempo",
+  "unilateral": true,
+  "knee": "ok",
+  "back": "ok",
+  "cues": "",
+  "equipment": "Peso corporal",
+  "modalidad": "freeletics",
+  "categoria": "movilidad",
+  "prompt": "standing triceps stretch, one arm bent behind the head with the other hand pulling the elbow",
+  "highlight": "triceps, shoulder",
+  "view": "Three-quarter rear view"
+ },
+ {
+  "id": "fl-calf-stretch",
+  "name": "Calf Stretch",
+  "nombreEs": "Estiramiento de gemelo",
+  "grupo": "Movilidad y estiramientos",
+  "primary": [
+   "pantorrillas"
+  ],
+  "secondary": [],
+  "medida": "tiempo",
+  "unilateral": true,
+  "knee": "ok",
+  "back": "ok",
+  "cues": "",
+  "equipment": "Peso corporal",
+  "modalidad": "freeletics",
+  "categoria": "movilidad",
+  "prompt": "calf stretch against a wall, one leg back straight with the heel down",
+  "highlight": "calves",
+  "view": "Side view"
+ },
+ {
+  "id": "fl-glutes-stretch",
+  "name": "Glutes Stretch",
+  "nombreEs": "Estiramiento de glúteo",
+  "grupo": "Movilidad y estiramientos",
+  "primary": [
+   "gluteos"
+  ],
+  "secondary": [],
+  "medida": "tiempo",
+  "unilateral": true,
+  "knee": "ok",
+  "back": "ok",
+  "cues": "",
+  "equipment": "Peso corporal",
+  "modalidad": "freeletics",
+  "categoria": "movilidad",
+  "prompt": "lying figure-four glute stretch on the back, one ankle crossed over the opposite knee",
+  "highlight": "glutes",
+  "view": "Side view"
+ },
+ {
+  "id": "fl-butterfly-hold",
+  "name": "Butterfly Hold",
+  "nombreEs": "Mariposa",
+  "grupo": "Movilidad y estiramientos",
+  "primary": [
+   "aductores"
+  ],
+  "secondary": [],
+  "medida": "tiempo",
+  "unilateral": false,
+  "knee": "ok",
+  "back": "ok",
+  "cues": "",
+  "equipment": "Peso corporal",
+  "modalidad": "freeletics",
+  "categoria": "movilidad",
+  "prompt": "seated butterfly stretch, soles of the feet together, knees out to the sides",
+  "highlight": "inner thighs",
+  "view": "Front view"
+ },
+ {
+  "id": "fl-quad-stretch",
+  "name": "Quad Stretch",
+  "nombreEs": "Estiramiento de cuádriceps",
+  "grupo": "Movilidad y estiramientos",
+  "primary": [
+   "cuadriceps"
+  ],
+  "secondary": [],
+  "medida": "tiempo",
+  "unilateral": true,
+  "knee": "ok",
+  "back": "ok",
+  "cues": "",
+  "equipment": "Peso corporal",
+  "modalidad": "freeletics",
+  "categoria": "movilidad",
+  "prompt": "standing quadriceps stretch holding one foot behind toward the glute, one hand on a wall",
+  "highlight": "quadriceps",
+  "view": "Side view"
+ },
+ {
+  "id": "fl-hamstring-stretch",
+  "name": "Hamstring Stretch",
+  "nombreEs": "Estiramiento de isquios",
+  "grupo": "Movilidad y estiramientos",
+  "primary": [
+   "isquios"
+  ],
+  "secondary": [],
+  "medida": "tiempo",
+  "unilateral": true,
+  "knee": "ok",
+  "back": "precaucion",
+  "cues": "Lumbar neutra: inclinarse desde la cadera, no desde la espalda.",
+  "equipment": "Peso corporal",
+  "modalidad": "freeletics",
+  "categoria": "movilidad",
+  "prompt": "standing hamstring stretch, one heel on a low step, leaning forward from the hips with a flat back",
+  "highlight": "hamstrings",
+  "view": "Side view"
+ },
+ {
+  "id": "fl-hip-stretch",
+  "name": "Hip Stretch",
+  "nombreEs": "Estiramiento de cadera",
+  "grupo": "Movilidad y estiramientos",
+  "primary": [
+   "cuadriceps"
+  ],
+  "secondary": [
+   "gluteos"
+  ],
+  "medida": "tiempo",
+  "unilateral": true,
+  "knee": "precaucion",
+  "back": "ok",
+  "cues": "Cojín bajo la rodilla apoyada.",
+  "equipment": "Peso corporal",
+  "modalidad": "freeletics",
+  "categoria": "movilidad",
+  "prompt": "half kneeling hip flexor stretch, back knee on a cushion, pelvis pushed forward",
+  "highlight": "hip flexor, quadriceps",
+  "view": "Side view"
+ },
+ {
+  "id": "fl-lunge-stretch",
+  "name": "Lunge Stretch",
+  "nombreEs": "Estiramiento en zancada",
+  "grupo": "Movilidad y estiramientos",
+  "primary": [
+   "cuadriceps",
+   "gluteos"
+  ],
+  "secondary": [],
+  "medida": "tiempo",
+  "unilateral": true,
+  "knee": "precaucion",
+  "back": "ok",
+  "cues": "Cojín bajo la rodilla.",
+  "equipment": "Peso corporal",
+  "modalidad": "freeletics",
+  "categoria": "movilidad",
+  "prompt": "low lunge stretch, back knee resting on a cushion, hands on the front knee",
+  "highlight": "hip flexor, glutes",
+  "view": "Side view"
+ },
+ {
+  "id": "fl-adductor-rock",
+  "name": "Half Kneeling Adductor Rock",
+  "nombreEs": "Balanceo de aductor en semi-rodilla",
+  "grupo": "Movilidad y estiramientos",
+  "primary": [
+   "aductores"
+  ],
+  "secondary": [],
+  "medida": "reps",
+  "unilateral": true,
+  "knee": "precaucion",
+  "back": "ok",
+  "cues": "Cojín bajo la rodilla.",
+  "equipment": "Peso corporal",
+  "modalidad": "freeletics",
+  "categoria": "movilidad",
+  "prompt": "half kneeling adductor rock, one leg extended to the side, rocking the hips back",
+  "highlight": "inner thighs",
+  "view": "Front view"
+ },
+ {
+  "id": "fl-90-90",
+  "name": "90 to 90",
+  "nombreEs": "90/90",
+  "grupo": "Movilidad y estiramientos",
+  "primary": [
+   "gluteos"
+  ],
+  "secondary": [
+   "abductores"
+  ],
+  "medida": "reps",
+  "unilateral": false,
+  "knee": "precaucion",
+  "back": "ok",
+  "cues": "Sin torsión de rodilla; ir hasta donde sea cómodo.",
+  "equipment": "Peso corporal",
+  "modalidad": "freeletics",
+  "categoria": "movilidad",
+  "prompt": "seated 90 90 hip stretch, both knees bent at 90 degrees on the floor, torso upright",
+  "highlight": "glutes, hips",
+  "view": "Front view"
+ },
+ {
+  "id": "fl-side-stretch",
+  "name": "Side Stretch",
+  "nombreEs": "Estiramiento lateral",
+  "grupo": "Movilidad y estiramientos",
+  "primary": [
+   "oblicuos"
+  ],
+  "secondary": [
+   "dorsales"
+  ],
+  "medida": "tiempo",
+  "unilateral": true,
+  "knee": "ok",
+  "back": "precaucion",
+  "cues": "Flexión lateral suave.",
+  "equipment": "Peso corporal",
+  "modalidad": "freeletics",
+  "categoria": "movilidad",
+  "prompt": "standing side stretch, one arm reaching overhead and bending to the side",
+  "highlight": "obliques, lats",
+  "view": "Front view"
+ }
+]

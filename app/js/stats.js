@@ -21,7 +21,10 @@ export const num = (v) => { const n = parseFloat(String(v ?? '').replace(',', '.
 export const fmtNum = (v, d = 1) => (v == null ? '—' : (Math.round(v * 10 ** d) / 10 ** d).toLocaleString('es', { maximumFractionDigits: d }));
 
 // Serie efectiva: tiene repeticiones registradas y el ejercicio no fue omitido.
-export const isWorkSet = (s) => (num(s?.reps) ?? 0) > 0;
+export const isWorkSet = (s) => (num(s?.reps) ?? 0) > 0 || (num(s?.secs) ?? 0) > 0;
+// Movilidad, estiramientos y cardio no suman series de fuerza al músculo.
+export const countsForVolume = (it) => !['movilidad', 'cardio'].includes(it?.categoria);
+export const fmtSet = (x) => (num(x.secs) ? `${num(x.secs)} s` : `${num(x.reps)}${num(x.weight) ? `×${fmtNum(num(x.weight))}` : ''}`);
 export const activeItems = (session) => (session.items || []).filter((it) => it.status !== 'omitido');
 
 export const completedSessions = (sessions) => sessions
@@ -40,6 +43,7 @@ export function setsByMuscle(sessions, from, to) {
   for (const s of sessions) {
     if (s.date < from || s.date > to) continue;
     for (const it of activeItems(s)) {
+      if (!countsForVolume(it)) continue;
       const n = (it.sets || []).filter(isWorkSet).length;
       if (!n) continue;
       for (const m of it.primary || []) if (m in out) out[m] += n;

@@ -4,7 +4,7 @@ import { MUSCLES, muscleName, rangesFor } from './muscles.js';
 import { MEASURE_FIELDS, NUTRITION_FIELDS, MEASURE_TYPES } from './fields.js';
 import {
   completedSessions, setsByMuscle, todayKey, dateKey, addDays, lastTrained, lastPerformance,
-  activeItems, isWorkSet, fmtNum, num,
+  activeItems, isWorkSet, fmtNum, num, fmtSet, sessionSetCount, sessionVolume, recentPRs,
 } from './stats.js';
 
 let samplePromise = null;
@@ -54,14 +54,14 @@ function sessionLine(s) {
   const parts = [];
   for (const it of s.items || []) {
     if (it.status === 'omitido') { parts.push(`  - OMITIDO ${it.name}${it.reason ? ` (motivo: ${it.reason})` : ''}`); continue; }
-    const sets = (it.sets || []).filter(isWorkSet).map((x) => `${num(x.reps)}x${num(x.weight) ?? 0}kg${x.rir !== '' && x.rir != null ? ` RIR${x.rir}` : ''}`).join(', ');
+    const sets = (it.sets || []).filter(isWorkSet).map((x) => `${fmtSet(x)}${num(x.weight) ? 'kg' : ''}${x.rir !== '' && x.rir != null ? ` RIR${x.rir}` : ''}`).join(', ');
     let tag = '';
     if (it.status === 'sustituido') tag = ` [SUSTITUYÓ a ${it.replacedFrom?.name || '?'}${it.reason ? `; motivo: ${it.reason}` : ''}]`;
     if (it.origin === 'agregado') tag += ' [AGREGADO por el usuario]';
     parts.push(`  - ${it.name}${tag}: ${sets || 'sin series registradas'}${it.note ? ` · nota: ${it.note}` : ''}`);
   }
   const post = s.post ? ` · post: RPE ${s.post.rpe ?? '?'}, dolor rodilla ${s.post.dolorRodilla ?? '?'}/10, espalda ${s.post.dolorEspalda ?? '?'}/10${s.post.notas ? `, "${s.post.notas}"` : ''}` : '';
-  return `${s.date} — ${s.title || 'Sesión'}${post}\n${parts.join('\n')}`;
+  return `${s.date} — ${s.lugar === 'freeletics' ? '[Freeletics en casa] ' : ''}${s.title || 'Sesión'}${post}\n${parts.join('\n')}`;
 }
 
 function measurementsBlock(measurements) {
@@ -81,12 +81,15 @@ function nutritionBlock(nutrition) {
   return NUTRITION_FIELDS.map((f) => { const a = avg(f.key); return a == null ? null : `${f.label} promedio ${fmtNum(a, 0)} ${f.unit}`; }).filter(Boolean).join(', ') + ` (${recent.length} días registrados)`;
 }
 
-function catalogBlock(exercises, sessions) {
+export const modalidadOf = (e) => e?.modalidad || 'forus';
+
+function catalogBlock(exercises, sessions, lugar) {
   const today = todayKey();
-  return exercises.filter((e) => !e.archived).map((e) => {
+  return exercises.filter((e) => !e.archived && modalidadOf(e) === lugar).map((e) => {
     const lp = lastPerformance(sessions, e.id, today);
-    const last = lp ? ` · última vez ${lp.date}: ${lp.sets.map((x) => `${num(x.reps)}x${num(x.weight) ?? 0}kg`).join(', ')}` : '';
-    return `${e.id} | ${e.name} | principal: ${(e.primary || []).join(',')} | secundario: ${(e.secondary || []).join(',')} | rodilla: ${e.knee || 'ok'} | espalda: ${e.back || 'ok'}${last}`;
+    const last = lp ? ` · última vez ${lp.date}: ${lp.sets.map(fmtSet).join(', ')}` : '';
+    const extra = [e.medida === 'tiempo' && 'se mide en segundos', e.unilateral && 'por lado (I/D)', e.categoria && e.categoria !== 'fuerza' && e.categoria, e.cues && `nota: ${e.cues}`].filter(Boolean).join('; ');
+    return `${e.id} | ${e.nombreEs ? `${e.name} (${e.nombreEs})` : e.name} | principal: ${(e.primary || []).join(',')} | secundario: ${(e.secondary || []).join(',')} | rodilla: ${e.knee || 'ok'} | espalda: ${e.back || 'ok'}${extra ? ` | ${extra}` : ''}${last}`;
   }).join('\n');
 }
 
@@ -99,8 +102,12 @@ export function buildPlanPrompt({ profile, exercises, sessions, measurements, nu
   const R = rangesFor(profile);
   const volume = MUSCLES.map((x) => { const m = R[x.id]; return `${m.id} (${m.name}): ${fmtNum(w1[m.id])} series últimos 7 días, ${fmtNum(w2[m.id])} la semana previa, ${m.max ? `meta ${m.min}-${m.max}/semana` : 'sin trabajo dedicado'}, último entrenamiento ${lt[m.id] || 'nunca'}`; }).join('\n');
   const history = done.slice(0, 10).map(sessionLine).join('\n\n') || 'Aún no hay sesiones registradas.';
+  const lugar = checkin.lugar || 'forus';
+  const fl = lugar === 'freeletics';
 
-  return `Eres el entrenador personal de esta persona. Diseña la sesión de gimnasio de HOY (${today}) en el gimnasio Forus.
+  return `Eres el entrenador personal de esta persona. ${fl
+    ? `Diseña una sesión de HOY (${today}) en casa, estilo Freeletics: solo peso corporal, sin equipamiento. Complementa sus sesiones de gimnasio en Forus (no las reemplaza).`
+    : `Diseña la sesión de gimnasio de HOY (${today}) en el gimnasio Forus.`}
 
 PERFIL
 ${profileBlock(profile)}
@@ -126,19 +133,19 @@ ${measurementsBlock(measurements)}
 NUTRICIÓN (Fitia)
 ${nutritionBlock(nutrition)}
 
-CATÁLOGO DE EJERCICIOS (id | nombre | músculos | aptitud rodilla/espalda | última vez)
-${catalogBlock(exercises, done)}
+CATÁLOGO DE EJERCICIOS ${fl ? 'FREELETICS (peso corporal)' : 'DE FORUS'} (id | nombre | músculos | aptitud rodilla/espalda | detalles | última vez)
+${catalogBlock(exercises, done, lugar)}
 
 REGLAS
 - Prioriza los músculos por debajo de su rango semanal y los que llevan más días sin trabajarse; evita repetir un grupo trabajado fuerte hace menos de 48 h.
 - Protege rodilla derecha y espalda: con dolor ≥4/10 evita ejercicios marcados "precaucion" para esa zona o reduce rango y carga; nunca uses "evitar". Explica la precaución concreta.
-- Progresión: si la última vez cumplió las repeticiones con RIR ≥2, sube la carga ~2.5-5%; si no, mantenla. Sugiere el peso en kg cuando haya historial; si no lo hay, deja peso en null.
+${fl ? '- Peso corporal: "peso" siempre null. Progresa con más repeticiones, más segundos, tempo más lento o una variante más difícil del catálogo. Para ejercicios medidos en segundos usa "segundos" y deja "reps" en null. Indica en la nota si es por lado.\n- Incluye calentamiento de movilidad y cierre con estiramientos del catálogo cuando quepa en el tiempo.' : '- Progresión: si la última vez cumplió las repeticiones con RIR ≥2, sube la carga ~2.5-5%; si no, mantenla. Sugiere el peso en kg cuando haya historial; si no lo hay, deja peso en null.'}
 - La sesión debe caber en el tiempo disponible contando calentamiento y descansos.
 - Usa ejercicios del catálogo por su id. Solo si hace falta uno que no existe, ponlo en "nuevo" con exerciseId null.
 - Escribe en español, breve y directo.
 
 Responde SOLO con un JSON con esta forma exacta:
-{"titulo": "Torso — empuje y espalda", "enfoque": ["pecho","dorsales"], "razonamiento": "2-4 frases de por qué esta sesión hoy", "calentamiento": ["5 min bicicleta", "..."], "ejercicios": [{"exerciseId": "press-pecho-maquina", "nuevo": null, "series": 3, "reps": "8-10", "peso": 40, "rir": 2, "descansoSeg": 90, "nota": "consejo corto"}], "vuelta_calma": ["..."], "precauciones": ["..."]}
+{"titulo": "Torso — empuje y espalda", "enfoque": ["pecho","dorsales"], "razonamiento": "2-4 frases de por qué esta sesión hoy", "calentamiento": ["5 min bicicleta", "..."], "ejercicios": [{"exerciseId": "press-pecho-maquina", "nuevo": null, "series": 3, "reps": "8-10", "segundos": null, "peso": 40, "rir": 2, "descansoSeg": 90, "nota": "consejo corto"}], "vuelta_calma": ["..."], "precauciones": ["..."]}
 Para un ejercicio nuevo: "exerciseId": null, "nuevo": {"name": "...", "primary": ["id_musculo"], "secondary": [], "equipment": "...", "knee": "ok|precaucion|evitar", "back": "ok|precaucion|evitar"}. Ids de músculo válidos: ${MUSCLES.map((m) => m.id).join(', ')}.`;
 }
 
@@ -199,3 +206,31 @@ export function miSaludSummary({ profile, sessions, measurements, nutrition, day
 }
 
 export { muscleName, activeItems };
+
+/* ---------- explicación de un ejercicio ---------- */
+export async function exerciseGuide(ex, profile, { signal } = {}) {
+  const sample = await getSample();
+  if (!sample) throw { code: 'not_granted' };
+  const prompt = `Explica cómo se hace este ejercicio a una persona principiante en el gimnasio.
+Ejercicio: ${ex.name}${ex.nombreEs ? ` (${ex.nombreEs})` : ''}
+Equipo: ${ex.equipment || 'no indicado'}
+Músculos principales: ${(ex.primary || []).join(', ')}; secundarios: ${(ex.secondary || []).join(', ') || 'ninguno'}
+${ex.medida === 'tiempo' ? 'Se mide en segundos (isométrico).' : ''}${ex.unilateral ? ' Se hace por lado (izquierda/derecha).' : ''}
+Nota del catálogo: ${ex.cues || 'ninguna'}
+Antecedentes de la persona: ${profile?.antecedentes || 'antecedente de rodilla derecha y espalda'}
+
+Sé concreto: posición de pies, manos, asiento o apoyo; hacia dónde se mueve la carga o el cuerpo (por ejemplo "empujas el rodillo hacia abajo y atrás"). Español, frases cortas.
+Responde SOLO con JSON:
+{"resumen": "1 frase de qué es y para qué sirve", "preparacion": ["ajuste de la máquina o posición inicial", "..."], "ejecucion": ["paso 1", "paso 2", "..."], "respiracion": "1 frase", "errores": ["error común y cómo evitarlo", "..."], "cuidados": ["precaución específica para su rodilla derecha o espalda", "..."], "sensacion": "dónde deberías sentirlo", "confusion": "con qué ejercicio se confunde a menudo y cómo distinguirlo, o null"}`;
+  return sample.json(prompt, { modelTier: 'default', cache: false, signal });
+}
+
+/* ---------- mensaje al terminar la sesión ---------- */
+export async function celebrationMessage(session, facts, { signal } = {}) {
+  const sample = await getSample();
+  if (!sample) return null;
+  const prompt = `Escribe un mensaje motivador breve (2-3 frases, español, tono cercano, sin exagerar ni usar emojis) para alguien que acaba de terminar su sesión de ${session.lugar === 'freeletics' ? 'Freeletics en casa' : 'gimnasio en Forus'}. Es principiante (1-2 meses) y su objetivo es ganar músculo sin subir de peso. Menciona 1 o 2 logros concretos de estos datos y una sugerencia para la próxima vez.
+Datos: ${JSON.stringify(facts)}`;
+  const { text } = await sample(prompt, { modelTier: 'quick', cache: false, signal });
+  return text;
+}

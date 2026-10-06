@@ -4,6 +4,7 @@ import { MUSCLES, muscleShort, SAFETY } from '../muscles.js';
 import { miSaludSummary } from '../ai.js';
 import { completedSessions, exerciseHistory, fmtShort, fmtNum, todayKey } from '../stats.js';
 import { Icon, Sheet, ExImage, LineChart, Confirm, toast, copyText } from '../ui.js';
+import { ExerciseInfo } from './exinfo.js';
 const { html, useState, useMemo } = window.htmPreact;
 
 const EN = {
@@ -31,9 +32,9 @@ function MuscleToggle({ primary, secondary, onChange }) {
   })}</div>`;
 }
 
-function ExerciseSheet({ ex, onClose }) {
+function ExerciseSheet({ ex, preset, onClose }) {
   const st = getState();
-  const [e, setE] = useState(() => ({ name: '', primary: [], secondary: [], equipment: '', knee: 'ok', back: 'ok', cues: '', ...(ex || {}) }));
+  const [e, setE] = useState(() => ({ name: '', primary: [], secondary: [], equipment: '', knee: 'ok', back: 'ok', cues: '', modalidad: 'forus', medida: 'reps', unilateral: false, categoria: 'fuerza', ...(preset || {}), ...(ex || {}) }));
   const [busy, setBusy] = useState(false);
   const [confirm, setConfirm] = useState(false);
   const [showPrompt, setShowPrompt] = useState(false);
@@ -43,7 +44,7 @@ function ExerciseSheet({ ex, onClose }) {
 
   async function save() {
     if (!e.name.trim() || !e.primary.length) { toast('Ponle nombre y al menos un músculo principal'); return; }
-    const id = ex?.id || newId('ex');
+    const id = ex?.id || newId(e.modalidad === 'freeletics' ? 'fl' : 'ex');
     await saveDoc('exercises', id, { ...e, name: e.name.trim(), createdAt: e.createdAt || new Date().toISOString() });
     toast('Ejercicio guardado'); onClose();
   }
@@ -72,6 +73,12 @@ function ExerciseSheet({ ex, onClose }) {
         <label class="field"><span>Rodilla derecha</span><select id="ex-knee" class="select" value=${e.knee} onChange=${(x) => up('knee')(x.target.value)}>${Object.entries(SAFETY).map(([k, v]) => html`<option value=${k}>${v.label}</option>`)}</select></label>
         <label class="field"><span>Espalda</span><select id="ex-back" class="select" value=${e.back} onChange=${(x) => up('back')(x.target.value)}>${Object.entries(SAFETY).map(([k, v]) => html`<option value=${k}>${v.label}</option>`)}</select></label>
       </div>
+      <div class="form-grid">
+        <label class="field"><span>Dónde</span><select id="ex-mod" class="select" value=${e.modalidad || 'forus'} onChange=${(x) => up('modalidad')(x.target.value)}><option value="forus">Forus (gimnasio)</option><option value="freeletics">Freeletics (casa)</option></select></label>
+        <label class="field"><span>Se mide en</span><select id="ex-med" class="select" value=${e.medida || 'reps'} onChange=${(x) => up('medida')(x.target.value)}><option value="reps">Repeticiones</option><option value="tiempo">Segundos</option></select></label>
+        <label class="field"><span>Tipo</span><select id="ex-cat" class="select" value=${e.categoria || 'fuerza'} onChange=${(x) => up('categoria')(x.target.value)}><option value="fuerza">Fuerza</option><option value="movilidad">Movilidad / estiramiento</option><option value="cardio">Cardio</option></select></label>
+        <label class="field"><span>Por lado (I/D)</span><select id="ex-uni" class="select" value=${e.unilateral ? 'si' : 'no'} onChange=${(x) => up('unilateral')(x.target.value === 'si')}><option value="no">No</option><option value="si">Sí</option></select></label>
+      </div>
       <label class="field"><span>Técnica y claves</span><textarea id="ex-cues" class="textarea" style="min-height:64px" value=${e.cues} onInput=${(x) => up('cues')(x.target.value)}></textarea></label>
       ${hist.length ? html`<div class="card stack-sm"><span class="eyebrow">1RM estimado · ${hist.length} sesiones</span><${LineChart} series=${[{ name: '1RM', points: hist.slice(-12).map((r) => ({ x: fmtShort(r.date), y: Math.round(r.best.e1rm * 10) / 10 })) }]} unit=" kg" /></div>` : null}
       <div class="row">
@@ -85,27 +92,30 @@ function ExerciseSheet({ ex, onClose }) {
 function Catalog() {
   const st = useStore();
   const [q, setQ] = useState(''); const [m, setM] = useState(''); const [sheet, setSheet] = useState(null);
-  const list = st.exercises.filter((e) => !e.archived)
+  const [mod, setMod] = useState('forus'); const [info, setInfo] = useState(null);
+  const list = st.exercises.filter((e) => !e.archived && (e.modalidad || 'forus') === mod)
     .filter((e) => !m || (e.primary || []).includes(m))
-    .filter((e) => !q || e.name.toLowerCase().includes(q.toLowerCase()))
+    .filter((e) => !q || `${e.name} ${e.nombreEs || ''}`.toLowerCase().includes(q.toLowerCase()))
     .sort((a, b) => a.name.localeCompare(b.name, 'es'));
   return html`
     <div class="stack">
+      <div class="seg" role="group" style="align-self:flex-start"><button aria-pressed=${mod === 'forus'} onClick=${() => setMod('forus')}>Forus</button><button aria-pressed=${mod === 'freeletics'} onClick=${() => setMod('freeletics')}>Freeletics</button></div>
       <div class="row"><input id="cat-q" class="input grow" style="flex:1 1 200px" type="search" placeholder="Buscar" value=${q} onInput=${(e) => setQ(e.target.value)} />
-        <button class="btn btn-primary" onClick=${() => setSheet({})}><${Icon} name="plus" /> Nuevo</button></div>
+        <button class="btn btn-primary" onClick=${() => setSheet({ ex: { modalidad: mod, equipment: mod === 'freeletics' ? 'Peso corporal' : '' }, isNew: true })}><${Icon} name="plus" /> Nuevo</button></div>
       <div class="chips"><button class="chip" aria-pressed=${!m} onClick=${() => setM('')}>Todos</button>${MUSCLES.map((mm) => html`<button class="chip" aria-pressed=${m === mm.id} onClick=${() => setM(m === mm.id ? '' : mm.id)}>${muscleShort(mm.id)}</button>`)}</div>
       ${!st.exercises.length && html`<div class="empty"><p>El catálogo está vacío. Crea tu primer ejercicio o pídele a Claude una sesión: los ejercicios que proponga se agregan solos.</p></div>`}
       <div class="ex-grid">
         ${list.map((e) => html`
-          <button class="ex-tile" onClick=${() => setSheet({ ex: e })}>
+          <button class="ex-tile" onClick=${() => setInfo(e.id)}>
             <div class="img"><${ExImage} ex=${e} /></div>
-            <div class="meta"><b>${e.name}</b>
+            <div class="meta"><b>${e.name}</b>${e.nombreEs ? html`<span class="xs muted">${e.nombreEs}</span>` : null}
               <div class="chips">${(e.primary || []).slice(0, 2).map((x) => html`<span class="chip primary">${muscleShort(x)}</span>`)}
                 ${e.knee && e.knee !== 'ok' ? html`<span class=${'chip ' + SAFETY[e.knee].cls}>Rodilla</span>` : null}
                 ${e.back && e.back !== 'ok' ? html`<span class=${'chip ' + SAFETY[e.back].cls}>Espalda</span>` : null}</div></div>
           </button>`)}
       </div>
-      ${sheet && html`<${ExerciseSheet} ex=${sheet.ex} onClose=${() => setSheet(null)} />`}
+      ${info && html`<${ExerciseInfo} exerciseId=${info} onClose=${() => setInfo(null)} onEdit=${(ex) => { setInfo(null); setSheet({ ex }); }} />`}
+      ${sheet && html`<${ExerciseSheet} ex=${sheet.isNew ? null : sheet.ex} preset=${sheet.isNew ? sheet.ex : null} onClose=${() => setSheet(null)} />`}
     </div>`;
 }
 
