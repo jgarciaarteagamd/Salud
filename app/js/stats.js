@@ -166,6 +166,7 @@ export function lastTrained(sessions) {
 
 export function classifyVolume(sets, m) {
   if (!sets) return 0;
+  if (!m.max) return 3; // sin meta dedicada: cualquier trabajo cuenta como suficiente
   if (sets < m.min) return 1;
   if (sets <= m.max) return 3;
   return 4;

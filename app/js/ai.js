@@ -1,6 +1,6 @@
 // Todo lo que se le pide a Claude desde la app. Cada llamada es independiente: el contexto
 // (perfil, historial, medidas) se arma aquí y viaja completo en el prompt.
-import { MUSCLES, muscleName } from './muscles.js';
+import { MUSCLES, muscleName, rangesFor } from './muscles.js';
 import { MEASURE_FIELDS, NUTRITION_FIELDS, MEASURE_TYPES } from './fields.js';
 import {
   completedSessions, setsByMuscle, todayKey, dateKey, addDays, lastTrained, lastPerformance,
@@ -96,7 +96,8 @@ export function buildPlanPrompt({ profile, exercises, sessions, measurements, nu
   const w1 = setsByMuscle(done, dateKey(addDays(new Date(), -6)), today);
   const w2 = setsByMuscle(done, dateKey(addDays(new Date(), -13)), dateKey(addDays(new Date(), -7)));
   const lt = lastTrained(done);
-  const volume = MUSCLES.map((m) => `${m.id} (${m.name}): ${fmtNum(w1[m.id])} series últimos 7 días, ${fmtNum(w2[m.id])} la semana previa, rango objetivo ${m.min}-${m.max}/semana, último entrenamiento ${lt[m.id] || 'nunca'}`).join('\n');
+  const R = rangesFor(profile);
+  const volume = MUSCLES.map((x) => { const m = R[x.id]; return `${m.id} (${m.name}): ${fmtNum(w1[m.id])} series últimos 7 días, ${fmtNum(w2[m.id])} la semana previa, ${m.max ? `meta ${m.min}-${m.max}/semana` : 'sin trabajo dedicado'}, último entrenamiento ${lt[m.id] || 'nunca'}`; }).join('\n');
   const history = done.slice(0, 10).map(sessionLine).join('\n\n') || 'Aún no hay sesiones registradas.';
 
   return `Eres el entrenador personal de esta persona. Diseña la sesión de gimnasio de HOY (${today}) en el gimnasio Forus.

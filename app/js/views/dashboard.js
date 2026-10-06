@@ -1,6 +1,6 @@
 // Inicio: mapa muscular con la evolución de lo trabajado, indicadores y composición corporal.
 import { useStore } from '../store.js';
-import { MUSCLES, MUSCLE, muscleName } from '../muscles.js';
+import { MUSCLES, muscleName, rangesFor } from '../muscles.js';
 import { Anatomy } from '../anatomy.js';
 import {
   completedSessions, setsByMuscle, todayKey, dateKey, addDays, weeklyMuscleSeries, muscleProgress, recentPRs,
@@ -32,6 +32,7 @@ export function DashboardView({ go }) {
   const [mode, setMode] = useState('semana');
   const [sel, setSel] = useState('pecho');
   const done = useMemo(() => completedSessions(st.sessions), [st.sessions]);
+  const MUSCLE = useMemo(() => rangesFor(st.profile), [st.profile]);
   const today = todayKey();
 
   const week = useMemo(() => setsByMuscle(done, dateKey(addDays(new Date(), -6)), today), [done]);
@@ -50,11 +51,11 @@ export function DashboardView({ go }) {
         f[m.id] = HEAT[p == null ? 0 : p <= 0 ? 1 : p <= 0.03 ? 2 : p <= 0.10 ? 3 : 4];
       } else {
         const v = (mode === 'semana' ? week : month)[m.id];
-        f[m.id] = HEAT[classifyVolume(v, m)];
+        f[m.id] = HEAT[classifyVolume(v, MUSCLE[m.id])];
       }
     }
     return f;
-  }, [mode, week, month, prog]);
+  }, [mode, week, month, prog, MUSCLE]);
 
   const thisMonth = today.slice(0, 7);
   const sessMonth = done.filter((s) => s.date.startsWith(thisMonth) && s.status === 'guardada').length;
@@ -79,9 +80,17 @@ export function DashboardView({ go }) {
   const exById = Object.fromEntries(st.exercises.map((e) => [e.id, e]));
   const prs = useMemo(() => recentPRs(done, 5), [done]);
 
-  const bodyPts = (key) => meas.filter((x) => x.valores?.[key] != null).slice(-12).map((x) => ({ x: fmtShort(x.date), y: Number(x.valores[key]) }));
-  const pesoPts = bodyPts('peso'); const grasaPts = bodyPts('grasaPct'); const muscPts = bodyPts('masaMuscular');
-  const sortedMuscles = [...MUSCLES].sort((a, b) => (week[b.id] / b.max) - (week[a.id] / a.max));
+  // Grasa y músculo de una sola fuente (el reloj si hay datos); mezclar báscula y reloj no es comparable.
+  const bodyPts = (key, tipo) => {
+    let rows = meas.filter((x) => x.valores?.[key] != null);
+    if (tipo && rows.some((x) => x.tipo === tipo)) rows = rows.filter((x) => x.tipo === tipo);
+    const byDay = new Map(); for (const x of rows) byDay.set(x.date, Number(x.valores[key]));
+    return [...byDay.entries()].slice(-12).map(([d, y]) => ({ x: fmtShort(d), y }));
+  };
+  const pesoPts = bodyPts('peso', 'reloj'); const grasaPts = bodyPts('grasaPct', 'reloj');
+  const muscKey = meas.some((x) => x.valores?.musculoEsqueletico != null) ? 'musculoEsqueletico' : 'masaMuscular';
+  const muscPts = bodyPts(muscKey, 'reloj');
+  const sortedMuscles = MUSCLES.map((x) => MUSCLE[x.id]).sort((a, b) => (week[b.id] / (b.max || 1)) - (week[a.id] / (a.max || 1)));
 
   return html`
     <div class="stack">
@@ -116,14 +125,14 @@ export function DashboardView({ go }) {
           <div class="anat-card stack-sm">
             <${Anatomy} fills=${fills} selected=${sel} onSelect=${setSel} label=${muscleName} />
             <div class="legend">${MODES[mode].legend.map(([i, l]) => html`<span class="row" style="gap:4px"><i class="sw" style=${`background:${HEAT[i]}`}></i>${l}</span>`)}</div>
-            <p class="xs muted">${mode === 'fuerza' ? 'Cambio del mejor 1RM estimado (ajustado por RIR): últimas 4 semanas frente a las 4 anteriores.' : mode === 'mes' ? 'Promedio de series semanales de las últimas 4 semanas frente al rango recomendado.' : 'Series de los últimos 7 días frente al rango semanal recomendado.'} Toca un músculo para ver su detalle.</p>
+            <p class="xs muted">${mode === 'fuerza' ? 'Cambio del mejor 1RM estimado (ajustado por RIR): últimas 4 semanas frente a las 4 anteriores.' : mode === 'mes' ? 'Promedio de series semanales de las últimas 4 semanas frente a la meta semanal.' : `Series de los últimos 7 días frente a ${MUSCLE.pecho.personal ? 'tus metas semanales' : 'el rango semanal recomendado'}.`} Toca un músculo para ver su detalle.</p>
           </div>
 
           <div class="card stack">
             <div class="row-between">
               <div class="stack-sm" style="gap:2px"><span class="eyebrow">${m.group}</span><h3>${m.name}</h3></div>
               <div style="text-align:right">
-                <div class="kpi" style="border:0;padding:0;background:none"><span class="v">${fmtNum(week[sel])}<small>/ ${m.min}–${m.max}</small></span></div>
+                <div class="kpi" style="border:0;padding:0;background:none"><span class="v">${fmtNum(week[sel])}<small>${m.max ? `/ ${m.min}–${m.max}` : ''}</small></span></div>
                 <span class="xs muted">series esta semana</span>
               </div>
             </div>
@@ -131,7 +140,7 @@ export function DashboardView({ go }) {
               <span>${lt[sel] ? `Último trabajo: hace ${daysBetween(lt[sel], today)} d` : 'Aún sin trabajar'}</span>
               ${prog[sel] != null && html`<span class=${'chip ' + (prog[sel] > 0 ? 'good' : 'warn')}>Fuerza ${prog[sel] > 0 ? '+' : ''}${fmtNum(prog[sel] * 100)} %</span>`}
             </div>
-            <div class="stack-sm"><span class="eyebrow">Series por semana · banda = rango objetivo</span><${BarChart} points=${series} band=${[m.min, m.max]} /></div>
+            <div class="stack-sm"><span class="eyebrow">Series por semana · banda = rango objetivo</span><${BarChart} points=${series} band=${m.max ? [m.min, m.max] : null} /></div>
             ${topEx.length ? html`
               <div class="stack-sm">
                 <span class="eyebrow">Ejercicios · 1RM estimado</span>
@@ -150,7 +159,7 @@ export function DashboardView({ go }) {
         <div class="section-head"><h2>Volumen semanal</h2><span class="xs muted">últimos 7 días · banda verde = rango</span></div>
         <div class="card mlist" style="padding:6px 10px">
           ${sortedMuscles.map((mm) => {
-            const v = week[mm.id]; const scale = Math.max(mm.max * 1.25, v || 0);
+            const v = week[mm.id]; const scale = Math.max((mm.max || 4) * 1.25, v || 0);
             return html`<button class=${'mrow' + (sel === mm.id ? ' sel' : '')} onClick=${() => setSel(mm.id)}>
               <span class="name">${mm.short || mm.name}</span>
               <span class="bar"><span class="band" style=${`left:${(mm.min / scale) * 100}%;width:${((mm.max - mm.min) / scale) * 100}%`}></span><span class="fill" style=${`width:${Math.min(100, ((v || 0) / scale) * 100)}%;background:${HEAT[classifyVolume(v, mm)]}`}></span></span>
@@ -164,7 +173,7 @@ export function DashboardView({ go }) {
         ${pesoPts.length || grasaPts.length ? html`
           <div class="anat-wrap">
             <div class="card stack-sm"><span class="eyebrow">Peso · kg</span><${LineChart} series=${[{ name: 'Peso', points: pesoPts }]} /></div>
-            <div class="card stack-sm"><span class="eyebrow">Grasa % y masa muscular kg</span>
+            <div class="card stack-sm"><span class="eyebrow">Grasa % y ${muscKey === 'musculoEsqueletico' ? 'músculo esquelético' : 'masa muscular'} kg</span>
               ${grasaPts.length ? html`<${LineChart} series=${[{ name: 'Grasa %', points: grasaPts }]} unit="%" />` : null}
               ${muscPts.length ? html`<${LineChart} series=${[{ name: 'Masa muscular', points: muscPts }]} />` : null}
             </div>

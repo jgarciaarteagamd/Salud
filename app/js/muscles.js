@@ -34,3 +34,14 @@ export const SAFETY = {
   precaucion: { label: 'Con cuidado', cls: 'warn' },
   evitar: { label: 'Evitar', cls: 'bad' },
 };
+
+// Rango semanal efectivo: si el perfil trae metas personales (`metasSeries`), la meta es el mínimo
+// y ~1,6× la meta el máximo; con meta 0 el músculo no tiene trabajo dedicado.
+export function rangesFor(profile) {
+  const metas = profile?.metasSeries || {};
+  return Object.fromEntries(MUSCLES.map((m) => {
+    if (!(m.id in metas)) return [m.id, { ...m }];
+    const t = Number(metas[m.id]) || 0;
+    return [m.id, { ...m, min: t, max: t ? Math.max(t + 1, Math.round(t * 1.6)) : 0, personal: true }];
+  }));
+}
