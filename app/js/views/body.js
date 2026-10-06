@@ -1,7 +1,7 @@
 // Cuerpo: medidas (antropometría, bioimpedancia, Samsung Watch) y nutrición (Fitia).
 // Cada registro se crea desde capturas que Claude lee, o a mano; siempre se revisa antes de guardar.
 import { useStore, saveDoc, deleteDoc, newId, uploadImage, canUpload, assetUrl } from '../store.js';
-import { MEASURE_GROUPS, MEASURE_FIELDS, MEASURE_TYPES, NUTRITION_FIELDS } from '../fields.js';
+import { MEASURE_GROUPS, MEASURE_FIELDS, MEASURE_TYPES, NUTRITION_FIELDS, mergeMeasurementsByDate, SOURCE_SHORT } from '../fields.js';
 import { extractMeasurements, extractNutrition, imageLimits, errorCopy } from '../ai.js';
 import { todayKey, fmtShort, fmtDay, fmtNum, num, addDays, dateKey } from '../stats.js';
 import { Icon, Sheet, LineChart, Thinking, Confirm, toast } from '../ui.js';
@@ -106,11 +106,13 @@ function EntrySheet({ kind, entry, onClose }) {
 
 function Measures({ list, open }) {
   const [metric, setMetric] = useState('peso');
-  const sorted = [...list].sort((a, b) => (a.date < b.date ? -1 : 1));
-  const used = MEASURE_FIELDS.filter((f) => sorted.some((m) => m.valores?.[f.key] != null));
-  const cols = sorted.slice(-8);
-  const pts = sorted.filter((m) => m.valores?.[metric] != null).map((m) => ({ x: fmtShort(m.date), y: Number(m.valores[metric]) }));
+  const [pick, setPick] = useState(null);
+  const days = mergeMeasurementsByDate(list);
+  const used = MEASURE_FIELDS.filter((f) => days.some((d) => d.valores[f.key] != null));
+  const cols = days.slice(-8).reverse(); // la más reciente primero
+  const pts = days.filter((d) => d.valores[metric] != null).map((d) => ({ x: fmtShort(d.date), y: Number(d.valores[metric]) }));
   const f = MEASURE_FIELDS.find((x) => x.key === metric);
+  const openDay = (d) => (d.entries.length === 1 ? open({ entry: d.entries[0] }) : setPick(d));
 
   if (!list.length) return html`<div class="empty"><p>Sin medidas todavía. Sube una captura de tu antropometría, de la báscula o de Samsung Health.</p><button class="btn btn-primary" onClick=${() => open({})}><${Icon} name="camera" /> Subir captura</button></div>`;
   return html`
@@ -122,11 +124,16 @@ function Measures({ list, open }) {
       </div>
       <div class="mtable-wrap">
         <table class="mtable">
-          <thead><tr><th>Medida</th>${cols.map((c) => html`<th><button class="btn btn-ghost btn-sm" onClick=${() => open({ entry: c })} title=${MEASURE_TYPES[c.tipo] || ''}>${fmtShort(c.date)}</button></th>`)}</tr></thead>
-          <tbody>${used.map((u) => html`<tr><td>${u.label} <span class="xs muted">${u.unit}</span></td>${cols.map((c) => html`<td>${c.valores?.[u.key] != null ? fmtNum(Number(c.valores[u.key]), 2) : '—'}</td>`)}</tr>`)}</tbody>
+          <thead><tr><th>Medida</th>${cols.map((d) => html`<th><button class="btn btn-ghost btn-sm" onClick=${() => openDay(d)}>${fmtShort(d.date)}</button></th>`)}</tr>
+            <tr><td class="xs muted">Fuentes</td>${cols.map((d) => html`<td class="xs muted">${d.tipos.map((t) => SOURCE_SHORT[t] || t).join(' · ')}</td>`)}</tr></thead>
+          <tbody>${used.map((u) => html`<tr><td>${u.label} <span class="xs muted">${u.unit}</span></td>${cols.map((d) => html`<td>${d.valores[u.key] != null ? html`${fmtNum(Number(d.valores[u.key]), 2)}${d.tipos.length > 1 ? html`<sup class="src">${(SOURCE_SHORT[d.fuente[u.key]] || '?')[0]}</sup>` : null}` : '—'}</td>`)}</tr>`)}</tbody>
         </table>
       </div>
-      <p class="xs muted">Toca una fecha para ver la captura, corregir o eliminar ese registro.</p>
+      <p class="xs muted">Los registros del mismo día se unen. Si un valor se repite, manda el reloj (R), luego la báscula (B) y la cinta (C). Toca una fecha para ver las capturas, corregir o eliminar.</p>
+      ${pick && html`<${Sheet} title=${`Registros del ${fmtDay(pick.date)}`} onClose=${() => setPick(null)}>
+        <div class="picker-list">${pick.entries.map((e) => html`<button class="pick" style="grid-template-columns:1fr auto" onClick=${() => { setPick(null); open({ entry: e }); }}>
+          <div><b>${MEASURE_TYPES[e.tipo] || e.tipo}</b><div class="xs muted">${Object.keys(e.valores || {}).length} valores${e.notas ? ` · ${e.notas}` : ''}</div></div><${Icon} name="chevron" /></button>`)}</div>
+      </${Sheet}>`}
     </div>`;
 }
 

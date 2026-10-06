@@ -4,7 +4,7 @@ import { saveDoc, deleteDoc, newId, getState } from '../store.js';
 import { MUSCLES, muscleShort } from '../muscles.js';
 import { lastPerformance, num, fmtNum, fmtDay, isWorkSet, sessionVolume, sessionSetCount, todayKey, fmtSet } from '../stats.js';
 import { ExerciseInfo } from './exinfo.js';
-import { Icon, Sheet, ExThumb, Confirm, toast } from '../ui.js';
+import { Icon, Sheet, ExThumb, Confirm, toast, copyText } from '../ui.js';
 const { html, useState, useEffect, useRef, useMemo } = window.htmPreact;
 
 export const SKIP_REASONS = ['No alcancé el tiempo', 'Máquina ocupada', 'Molestia en rodilla', 'Molestia en espalda', 'Cansancio', 'No me gustó'];
@@ -244,6 +244,43 @@ function RestTimer({ until, onDone }) {
   return html`<div class="timer" aria-live="polite"><${Icon} name="timer" /> ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}</div>`;
 }
 
+/* ---------- llevar la sesión a "Crear workout" de Freeletics ---------- */
+export function freeleticsRounds(session) {
+  const items = (session.items || []).filter((i) => i.status !== 'omitido');
+  const mob = items.filter((i) => i.categoria === 'movilidad');
+  const work = items.filter((i) => i.categoria !== 'movilidad');
+  const amount = (it) => {
+    const p = it.planned || {};
+    const v = it.medida === 'tiempo' ? `${p.segundos || it.sets?.[0]?.secs || 30} s` : `${p.reps || it.sets?.[0]?.reps || 10} reps`;
+    return `${v}${it.unilateral ? ' por lado' : ''}`;
+  };
+  const n = Math.max(1, ...work.map((i) => i.planned?.series || i.sets?.length || 1));
+  const rounds = Array.from({ length: n }, (_, r) => work.filter((i) => (i.planned?.series || i.sets?.length || 1) > r)
+    .map((i) => ({ name: i.name, amount: amount(i), pausa: i.planned?.descansoSeg || 30 })));
+  return { mob: mob.map((i) => ({ name: i.name, amount: amount(i) })), rounds };
+}
+
+function FreeleticsExport({ session }) {
+  const [open, setOpen] = useState(false);
+  const { mob, rounds } = freeleticsRounds(session);
+  const text = [
+    `Workout: ${session.title || 'Sesión en casa'}`,
+    ...(mob.length ? ['', 'Calentamiento / movilidad:', ...mob.map((m) => `- ${m.name} · ${m.amount}`)] : []),
+    ...rounds.flatMap((r, i) => ['', `Ronda ${i + 1}/${rounds.length}`, ...r.flatMap((x) => [`+ Exercise: ${x.name} · ${x.amount}`, `+ Pausa: ${x.pausa} s`])]),
+  ].join('\n');
+  return html`
+    <section class="panel stack-sm">
+      <button class="row-between" style="background:none;border:0;padding:0;cursor:pointer;color:var(--ink)" aria-expanded=${open} onClick=${() => setOpen(!open)}>
+        <span class="eyebrow">Crear este workout en Freeletics</span><${Icon} name=${open ? 'back' : 'chevron'} size="16" />
+      </button>
+      ${open && html`
+        <p class="small">En Freeletics: Crear workout → ponle el nombre → en cada ronda toca <b>+ Exercise</b> y <b>+ Pausa</b> en este orden. Con "Duplicar ronda" ahorras pasos si las rondas son iguales.</p>
+        <div class="copybox">${text}</div>
+        <button class="btn btn-sm" style="align-self:flex-start" onClick=${() => copyText(text)}><${Icon} name="copy" size="16" /> Copiar</button>
+        <p class="xs muted">Al terminar, registra aquí las repeticiones o segundos reales para que cuenten en tu progreso.</p>`}
+    </section>`;
+}
+
 /* ---------- editor ---------- */
 export function SessionEditor({ session, mode = 'live', onClosed }) {
   const st = getState();
@@ -354,6 +391,7 @@ export function SessionEditor({ session, mode = 'live', onClosed }) {
         <div class="row small muted num"><span>${active.length} ejercicios</span>·<span>${totalSets} series</span>${vol ? html`·<span>${fmtNum(vol, 0)} kg movidos</span>` : null}</div>
       </header>
 
+      ${draft.lugar === 'freeletics' && mode === 'live' && html`<${FreeleticsExport} session=${draft} />`}
       ${plan?.razonamiento && html`
         <section class="panel stack-sm">
           <span class="eyebrow">Por qué esta sesión</span>

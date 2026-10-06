@@ -2,6 +2,7 @@
 import { useStore } from '../store.js';
 import { MUSCLES, muscleName, rangesFor } from '../muscles.js';
 import { Anatomy } from '../anatomy.js';
+import { mergeMeasurementsByDate } from '../fields.js';
 import {
   completedSessions, setsByMuscle, todayKey, dateKey, addDays, weeklyMuscleSeries, muscleProgress, recentPRs,
   weekStreak, lastTrained, daysBetween, classifyVolume, fmtNum, fmtDay, fmtShort, exerciseHistory, activeItems,
@@ -62,7 +63,7 @@ export function DashboardView({ go }) {
   const sets7 = Object.entries(week).reduce((a, [k, v]) => a + (MUSCLE[k] ? v : 0), 0);
   const streak = weekStreak(done);
   const meas = [...st.measurements].sort((a, b) => (a.date < b.date ? -1 : 1));
-  const withW = meas.filter((m) => m.valores?.peso != null);
+  const withW = mergeMeasurementsByDate(st.measurements).filter((m) => m.valores.peso != null); // un registro por día
   const lastW = withW[withW.length - 1]; const prevW = withW[withW.length - 2];
   const open = st.sessions.find((s) => s.status === 'plan' || s.status === 'en_curso');
   const name = st.profile?.nombre?.split(' ')[0];

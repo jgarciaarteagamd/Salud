@@ -1,7 +1,7 @@
 // Todo lo que se le pide a Claude desde la app. Cada llamada es independiente: el contexto
 // (perfil, historial, medidas) se arma aquí y viaja completo en el prompt.
 import { MUSCLES, muscleName, rangesFor } from './muscles.js';
-import { MEASURE_FIELDS, NUTRITION_FIELDS, MEASURE_TYPES } from './fields.js';
+import { MEASURE_FIELDS, NUTRITION_FIELDS, MEASURE_TYPES, mergeMeasurementsByDate, SOURCE_SHORT } from './fields.js';
 import {
   completedSessions, setsByMuscle, todayKey, dateKey, addDays, lastTrained, lastPerformance,
   activeItems, isWorkSet, fmtNum, num, fmtSet, sessionSetCount, sessionVolume, recentPRs,
@@ -65,12 +65,12 @@ function sessionLine(s) {
 }
 
 function measurementsBlock(measurements) {
-  const sorted = [...measurements].sort((a, b) => (a.date < b.date ? 1 : -1)).slice(0, 4);
-  if (!sorted.length) return 'Sin medidas registradas.';
-  return sorted.map((m) => {
-    const vals = MEASURE_FIELDS.filter((f) => m.valores?.[f.key] != null).map((f) => `${f.label} ${m.valores[f.key]}${f.unit ? ` ${f.unit}` : ''}`).join(', ');
-    return `${m.date} (${MEASURE_TYPES[m.tipo] || m.tipo}): ${vals}`;
-  }).join('\n');
+  const days = mergeMeasurementsByDate(measurements).reverse().slice(0, 4);
+  if (!days.length) return 'Sin medidas registradas.';
+  return days.map((d) => {
+    const vals = MEASURE_FIELDS.filter((f) => d.valores[f.key] != null).map((f) => `${f.label} ${d.valores[f.key]}${f.unit ? ` ${f.unit}` : ''} [${SOURCE_SHORT[d.fuente[f.key]] || d.fuente[f.key]}]`).join(', ');
+    return `${d.date}: ${vals}`;
+  }).join('\n') + '\n(Grasa y músculo: el reloj es la referencia; la báscula no es comparable.)';
 }
 
 function nutritionBlock(nutrition) {

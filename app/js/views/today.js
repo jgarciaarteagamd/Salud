@@ -118,15 +118,14 @@ export function TodayView({ go }) {
     return html`
       <div class="stack">
         ${current.date !== todayKey() && html`<div class="panel small">Esta sesión del ${fmtDay(current.date)} quedó sin cerrar. Puedes completarla y guardarla, o descartarla.</div>`}
-        ${untouched && html`
-          <div class="row">
-            <button class="btn btn-sm" onClick=${() => setSheet('checkin')}><${Icon} name="spark" size="16" /> Regenerar</button>
-            <button class="btn btn-sm btn-ghost btn-danger" onClick=${() => setSheet('discard')}>Descartar</button>
-          </div>`}
+        <div class="row">
+          ${untouched && html`<button class="btn btn-sm" onClick=${() => setSheet('checkin')}><${Icon} name="spark" size="16" /> Regenerar</button>`}
+          <button class="btn btn-sm btn-ghost btn-danger" onClick=${() => setSheet('discard')}><${Icon} name="trash" size="16" /> ${untouched ? 'Descartar' : 'Descartar sesión'}</button>
+        </div>
         <${SessionEditor} key=${current.id} session=${current} mode="live" onClosed=${(s) => (s ? setCelebrate(s) : go('inicio'))} />
         ${sheet === 'checkin' && html`<${CheckinSheet} lugar=${current.lugar || 'forus'} profile=${st.profile} onClose=${() => setSheet(null)} onPlanned=${async () => { await deleteDoc('sessions', current.id); setSheet(null); toast('Sesión regenerada'); }} />`}
         ${celebration}
-        ${sheet === 'discard' && html`<${Confirm} title="Descartar sesión" text="Se borra esta sesión planificada. Puedes generar otra." confirmLabel="Descartar" onConfirm=${() => deleteDoc('sessions', current.id)} onClose=${() => setSheet(null)} />`}
+        ${sheet === 'discard' && html`<${Confirm} title="Descartar sesión" text=${untouched ? 'Se borra esta sesión planificada. Puedes generar otra cuando quieras.' : 'Se borra esta sesión y las series que registraste en ella. No se puede deshacer.'} confirmLabel="Descartar" onConfirm=${async () => { await deleteDoc('sessions', current.id); toast('Sesión eliminada'); }} onClose=${() => setSheet(null)} />`}
       </div>`;
   }
 

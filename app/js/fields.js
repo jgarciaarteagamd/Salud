@@ -78,3 +78,32 @@ export const NUTRITION_FIELDS = [
   { key: 'kcalObjetivo', label: 'Meta de calorías', unit: 'kcal' },
   { key: 'proteinaObjetivo', label: 'Meta de proteína', unit: 'g' },
 ];
+
+// Prioridad cuando un mismo valor viene de varias fuentes el mismo día:
+// el reloj (Samsung Health) es la referencia; luego báscula, cinta y registro manual.
+export const SOURCE_PRIORITY = ['reloj', 'bioimpedancia', 'antropometria', 'manual'];
+export const SOURCE_SHORT = { reloj: 'Reloj', bioimpedancia: 'Báscula', antropometria: 'Cinta', manual: 'Manual' };
+const rank = (t) => { const i = SOURCE_PRIORITY.indexOf(t); return i < 0 ? SOURCE_PRIORITY.length : i; };
+
+// Une todos los registros de una misma fecha en uno. Devuelve, por fecha:
+// { date, valores, fuente: {clave: tipo}, tipos: [...], entries: [...] }, ordenado por fecha.
+export function mergeMeasurementsByDate(list) {
+  const byDate = new Map();
+  for (const m of list) {
+    if (!m?.date) continue;
+    const g = byDate.get(m.date) || { date: m.date, valores: {}, fuente: {}, tipos: [], entries: [] };
+    g.entries.push(m);
+    byDate.set(m.date, g);
+  }
+  for (const g of byDate.values()) {
+    g.entries.sort((a, b) => rank(a.tipo) - rank(b.tipo));
+    for (const e of g.entries) {
+      if (!g.tipos.includes(e.tipo)) g.tipos.push(e.tipo);
+      for (const [k, v] of Object.entries(e.valores || {})) {
+        if (v == null || v === '' || k in g.valores) continue; // gana la fuente de mayor prioridad
+        g.valores[k] = v; g.fuente[k] = e.tipo;
+      }
+    }
+  }
+  return [...byDate.values()].sort((a, b) => (a.date < b.date ? -1 : 1));
+}
