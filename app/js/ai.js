@@ -7,6 +7,8 @@ import {
   activeItems, isWorkSet, fmtNum, num, fmtSet, sessionSetCount, sessionVolume, recentPRs,
 } from './stats.js';
 
+const FASE_TAG = { calentamiento: ' [CALENTAMIENTO]', enfriamiento: ' [VUELTA A LA CALMA]' };
+
 let samplePromise = null;
 export function getSample() {
   if (!samplePromise) samplePromise = (async () => { try { return window.claude ? await window.claude.use('sample') : null; } catch { return null; } })();
@@ -53,9 +55,9 @@ function profileBlock(p = {}) {
 function sessionLine(s) {
   const parts = [];
   for (const it of s.items || []) {
-    if (it.status === 'omitido') { parts.push(`  - OMITIDO ${it.name}${it.reason ? ` (motivo: ${it.reason})` : ''}`); continue; }
+    if (it.status === 'omitido') { parts.push(`  - OMITIDO ${it.name}${FASE_TAG[it.fase] || ''}${it.reason ? ` (motivo: ${it.reason})` : ''}`); continue; }
     const sets = (it.sets || []).filter(isWorkSet).map((x) => `${fmtSet(x)}${num(x.weight) ? 'kg' : ''}${x.rir !== '' && x.rir != null ? ` RIR${x.rir}` : ''}`).join(', ');
-    let tag = '';
+    let tag = FASE_TAG[it.fase] || '';
     if (it.status === 'sustituido') tag = ` [SUSTITUYÓ a ${it.replacedFrom?.name || '?'}${it.reason ? `; motivo: ${it.reason}` : ''}]`;
     if (it.origin === 'agregado') tag += ' [AGREGADO por el usuario]';
     parts.push(`  - ${it.name}${tag}: ${sets || 'sin series registradas'}${it.note ? ` · nota: ${it.note}` : ''}`);
@@ -83,10 +85,14 @@ function nutritionBlock(nutrition) {
 
 export const modalidadOf = (e) => e?.modalidad || 'forus';
 
-function catalogBlock(exercises, sessions, lugar) {
+// Movilidad, estiramientos y cardio sirven en cualquier lugar para calentar o enfriar:
+// además del catálogo del lugar, se ofrecen los de la otra modalidad que sean de ese tipo.
+const isWarmupKind = (e) => ['movilidad', 'cardio'].includes(e.categoria);
+
+function catalogBlock(exercises, sessions, lugar, { warmupOnly = false } = {}) {
   const today = todayKey();
-  return exercises.filter((e) => !e.archived && modalidadOf(e) === lugar).map((e) => {
-    const lp = lastPerformance(sessions, e.id, today);
+  return exercises.filter((e) => !e.archived && (warmupOnly ? modalidadOf(e) !== lugar && isWarmupKind(e) : modalidadOf(e) === lugar)).map((e) => {
+    const lp = lastPerformance(sessions, e.id, today, null, warmupOnly);
     const last = lp ? ` · última vez ${lp.date}: ${lp.sets.map(fmtSet).join(', ')}` : '';
     const extra = [e.medida === 'tiempo' && 'se mide en segundos', e.unilateral && 'por lado (I/D)', e.categoria && e.categoria !== 'fuerza' && e.categoria, e.cues && `nota: ${e.cues}`].filter(Boolean).join('; ');
     return `${e.id} | ${e.nombreEs ? `${e.name} (${e.nombreEs})` : e.name} | principal: ${(e.primary || []).join(',')} | secundario: ${(e.secondary || []).join(',')} | rodilla: ${e.knee || 'ok'} | espalda: ${e.back || 'ok'}${extra ? ` | ${extra}` : ''}${last}`;
@@ -104,6 +110,7 @@ export function buildPlanPrompt({ profile, exercises, sessions, measurements, nu
   const history = done.slice(0, 10).map(sessionLine).join('\n\n') || 'Aún no hay sesiones registradas.';
   const lugar = checkin.lugar || 'forus';
   const fl = lugar === 'freeletics';
+  const warmCatalog = catalogBlock(exercises, done, lugar, { warmupOnly: true });
 
   return `Eres el entrenador personal de esta persona. ${fl
     ? `Diseña una sesión de HOY (${today}) en casa, estilo Freeletics: solo peso corporal, sin equipamiento. Complementa sus sesiones de gimnasio en Forus (no las reemplaza).`
@@ -135,18 +142,22 @@ ${nutritionBlock(nutrition)}
 
 CATÁLOGO DE EJERCICIOS ${fl ? 'FREELETICS (peso corporal)' : 'DE FORUS'} (id | nombre | músculos | aptitud rodilla/espalda | detalles | última vez)
 ${catalogBlock(exercises, done, lugar)}
-
+${warmCatalog ? `
+MOVILIDAD, ESTIRAMIENTOS Y CARDIO (sirven en cualquier lugar, para calentar o enfriar)
+${warmCatalog}
+` : ''}
 REGLAS
 - Prioriza los músculos por debajo de su rango semanal y los que llevan más días sin trabajarse; evita repetir un grupo trabajado fuerte hace menos de 48 h.
 - Protege rodilla derecha y espalda: con dolor ≥4/10 evita ejercicios marcados "precaucion" para esa zona o reduce rango y carga; nunca uses "evitar". Explica la precaución concreta.
-${fl ? '- Peso corporal: "peso" siempre null. Progresa con más repeticiones, más segundos, tempo más lento o una variante más difícil del catálogo. Para ejercicios medidos en segundos usa "segundos" y deja "reps" en null. Indica en la nota si es por lado.\n- Incluye calentamiento de movilidad y cierre con estiramientos del catálogo cuando quepa en el tiempo.' : '- Progresión: si la última vez cumplió las repeticiones con RIR ≥2, sube la carga ~2.5-5%; si no, mantenla. Sugiere el peso en kg cuando haya historial; si no lo hay, deja peso en null.'}
+${fl ? '- Peso corporal: "peso" siempre null. Progresa con más repeticiones, más segundos, tempo más lento o una variante más difícil del catálogo. Para ejercicios medidos en segundos usa "segundos" y deja "reps" en null. Indica en la nota si es por lado.\n- Incluye calentamiento de movilidad y cierre con estiramientos cuando quepa en el tiempo.' : '- Progresión: si la última vez cumplió las repeticiones con RIR ≥2, sube la carga ~2.5-5%; si no, mantenla. Sugiere el peso en kg cuando haya historial; si no lo hay, deja peso en null.'}
 - La sesión debe caber en el tiempo disponible contando calentamiento y descansos.
+- El calentamiento y la vuelta a la calma también son ejercicios, con la misma forma que los del bloque: cada uno se muestra con su dibujo y su explicación. Elige del catálogo (movilidad, estiramientos, cardio o series ligeras de aproximación de un ejercicio del bloque). Cardio y estiramientos sostenidos van en "segundos" (5 min = 300) con "reps" null; normalmente 1 serie y "descansoSeg" 0. Para series de aproximación pon el peso ligero en "peso".
 - Usa ejercicios del catálogo por su id. Solo si hace falta uno que no existe, ponlo en "nuevo" con exerciseId null.
 - Escribe en español, breve y directo.
 
 Responde SOLO con un JSON con esta forma exacta:
-{"titulo": "Torso — empuje y espalda", "enfoque": ["pecho","dorsales"], "razonamiento": "2-4 frases de por qué esta sesión hoy", "calentamiento": ["5 min bicicleta", "..."], "ejercicios": [{"exerciseId": "press-pecho-maquina", "nuevo": null, "series": 3, "reps": "8-10", "segundos": null, "peso": 40, "rir": 2, "descansoSeg": 90, "nota": "consejo corto"}], "vuelta_calma": ["..."], "precauciones": ["..."]}
-Para un ejercicio nuevo: "exerciseId": null, "nuevo": {"name": "...", "primary": ["id_musculo"], "secondary": [], "equipment": "...", "knee": "ok|precaucion|evitar", "back": "ok|precaucion|evitar"}. Ids de músculo válidos: ${MUSCLES.map((m) => m.id).join(', ')}.`;
+{"titulo": "Torso — empuje y espalda", "enfoque": ["pecho","dorsales"], "razonamiento": "2-4 frases de por qué esta sesión hoy", "calentamiento": [{"exerciseId": "${fl ? 'fl-cat-cow' : 'eliptica'}", "nuevo": null, "series": 1, "reps": null, "segundos": ${fl ? 60 : 300}, "peso": null, "rir": null, "descansoSeg": 0, "nota": "ritmo suave"}], "ejercicios": [{"exerciseId": "press-pecho-maquina", "nuevo": null, "series": 3, "reps": "8-10", "segundos": null, "peso": 40, "rir": 2, "descansoSeg": 90, "nota": "consejo corto"}], "vuelta_calma": [{"exerciseId": "...", "nuevo": null, "series": 1, "reps": null, "segundos": 30, "peso": null, "rir": null, "descansoSeg": 0, "nota": "..."}], "precauciones": ["..."]}
+Para un ejercicio nuevo: "exerciseId": null, "nuevo": {"name": "...", "primary": ["id_musculo"], "secondary": [], "equipment": "...", "knee": "ok|precaucion|evitar", "back": "ok|precaucion|evitar", "categoria": "fuerza|movilidad|cardio", "medida": "reps|tiempo"}. Ids de músculo válidos: ${MUSCLES.map((m) => m.id).join(', ')}.`;
 }
 
 export async function planSession(ctx, { signal, onText } = {}) {

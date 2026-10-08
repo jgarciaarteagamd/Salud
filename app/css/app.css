@@ -208,6 +208,8 @@ input[type="range"] { accent-color: var(--accent); width: 100%; }
 /* Session editor */
 .sess-head { display: flex; flex-direction: column; gap: 6px; }
 .plan-note { border-left: 3px solid var(--accent); padding: 4px 0 4px 12px; color: var(--ink); }
+.phase-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; border-top: 1px solid var(--line); padding-top: 14px; }
+.phase-notes { margin: 0; padding-left: 18px; display: grid; gap: 2px; }
 .ex-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); box-shadow: var(--shadow); overflow: hidden; }
 .ex-card.omitido { opacity: .65; box-shadow: none; background: var(--surface-2); }
 .ex-head { display: grid; grid-template-columns: 64px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 12px; }

@@ -16,31 +16,42 @@ async function planToSession(plan, checkin) {
   const { exercises, sessions } = getState();
   const byId = Object.fromEntries(exercises.map((e) => [e.id, e]));
   const items = [];
-  for (const p of plan.ejercicios || []) {
-    let ex = p.exerciseId ? byId[p.exerciseId] : null;
-    if (!ex && p.nuevo?.name) {
-      const id = `${slug(p.nuevo.name) || 'ejercicio'}-${Math.random().toString(36).slice(2, 5)}`;
-      ex = {
-        id, name: p.nuevo.name, primary: validMuscles(p.nuevo.primary), secondary: validMuscles(p.nuevo.secondary),
-        equipment: p.nuevo.equipment || (lugar === 'freeletics' ? 'Peso corporal' : ''), knee: p.nuevo.knee || 'ok', back: p.nuevo.back || 'ok', modalidad: lugar,
-        createdAt: new Date().toISOString(), createdBy: 'claude',
+  const notes = { calentamiento: [], enfriamiento: [] };
+  // Calentamiento y vuelta a la calma llegan como ejercicios (igual que el bloque); si Claude
+  // manda texto suelto o un ejercicio que no se puede resolver, queda como nota de esa fase.
+  const phases = [['calentamiento', plan.calentamiento], [null, plan.ejercicios], ['enfriamiento', plan.vuelta_calma]];
+  for (const [fase, list] of phases) {
+    for (const p of Array.isArray(list) ? list : []) {
+      if (typeof p === 'string') { if (fase) notes[fase].push(p); continue; }
+      if (!p || typeof p !== 'object') continue;
+      let ex = p.exerciseId ? byId[p.exerciseId] : null;
+      if (!ex && p.nuevo?.name) {
+        const id = `${slug(p.nuevo.name) || 'ejercicio'}-${Math.random().toString(36).slice(2, 5)}`;
+        const categoria = ['fuerza', 'movilidad', 'cardio'].includes(p.nuevo.categoria) ? p.nuevo.categoria : fase ? 'movilidad' : 'fuerza';
+        ex = {
+          id, name: p.nuevo.name, primary: validMuscles(p.nuevo.primary), secondary: validMuscles(p.nuevo.secondary),
+          equipment: p.nuevo.equipment || (lugar === 'freeletics' ? 'Peso corporal' : ''), knee: p.nuevo.knee || 'ok', back: p.nuevo.back || 'ok', modalidad: lugar,
+          categoria, medida: p.nuevo.medida === 'tiempo' || (!p.reps && p.segundos) ? 'tiempo' : 'reps',
+          createdAt: new Date().toISOString(), createdBy: 'claude',
+        };
+        await saveDoc('exercises', id, ex);
+        byId[id] = ex;
+      }
+      if (!ex) { if (fase && (p.nota || p.exerciseId)) notes[fase].push(p.nota || p.exerciseId); continue; }
+      const rest = parseInt(p.descansoSeg, 10);
+      const planned = {
+        series: Math.max(1, Math.min(8, parseInt(p.series, 10) || (fase ? 1 : 3))), reps: p.reps ?? '', segundos: parseInt(p.segundos, 10) || null,
+        peso: p.peso === null || p.peso === undefined || p.peso === '' ? null : Number(p.peso),
+        rir: p.rir ?? null, descansoSeg: fase ? (Number.isFinite(rest) ? rest : 0) : rest || 90, nota: p.nota || '',
       };
-      await saveDoc('exercises', id, ex);
-      byId[id] = ex;
+      items.push(makeItem(ex, { origin: 'plan', planned, sessions, fase }));
     }
-    if (!ex) continue;
-    const planned = {
-      series: Math.max(1, Math.min(8, parseInt(p.series, 10) || 3)), reps: p.reps ?? '', segundos: parseInt(p.segundos, 10) || null,
-      peso: p.peso === null || p.peso === undefined || p.peso === '' ? null : Number(p.peso),
-      rir: p.rir ?? null, descansoSeg: parseInt(p.descansoSeg, 10) || 90, nota: p.nota || '',
-    };
-    items.push(makeItem(ex, { origin: 'plan', planned, sessions }));
   }
   return {
     id: newId('s'), date: todayKey(), status: 'plan', source: 'ia', lugar,
     title: plan.titulo || 'Sesión de hoy', enfoque: validMuscles(plan.enfoque),
     plan: {
-      razonamiento: plan.razonamiento || '', calentamiento: plan.calentamiento || [], vuelta_calma: plan.vuelta_calma || [],
+      razonamiento: plan.razonamiento || '', calentamiento: notes.calentamiento, vuelta_calma: notes.enfriamiento,
       precauciones: plan.precauciones || [], generadoEn: new Date().toISOString(), checkin,
     },
     checkin, items, createdAt: new Date().toISOString(),

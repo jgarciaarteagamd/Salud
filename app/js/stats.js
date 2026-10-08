@@ -22,8 +22,10 @@ export const fmtNum = (v, d = 1) => (v == null ? '—' : (Math.round(v * 10 ** d
 
 // Serie efectiva: tiene repeticiones registradas y el ejercicio no fue omitido.
 export const isWorkSet = (s) => (num(s?.reps) ?? 0) > 0 || (num(s?.secs) ?? 0) > 0;
-// Movilidad, estiramientos y cardio no suman series de fuerza al músculo.
-export const countsForVolume = (it) => !['movilidad', 'cardio'].includes(it?.categoria);
+// Calentamiento y vuelta a la calma: ejercicios con su tarjeta, pero fuera del bloque principal.
+export const isPhaseItem = (it) => it?.fase === 'calentamiento' || it?.fase === 'enfriamiento';
+// Movilidad, estiramientos, cardio y lo que se hace al calentar o enfriar no suman series de fuerza al músculo.
+export const countsForVolume = (it) => !['movilidad', 'cardio'].includes(it?.categoria) && !isPhaseItem(it);
 export const fmtSet = (x) => (num(x.secs) ? `${num(x.secs)} s` : `${num(x.reps)}${num(x.weight) ? `×${fmtNum(num(x.weight))}` : ''}`);
 export const activeItems = (session) => (session.items || []).filter((it) => it.status !== 'omitido');
 
@@ -93,21 +95,25 @@ export function exerciseHistory(sessions, exerciseId) {
   for (const s of sessions) {
     for (const it of activeItems(s)) {
       if (it.exerciseId !== exerciseId) continue;
-      let best = null;
-      for (const set of it.sets || []) {
+      let best = null; // las series de calentamiento no cuentan para el 1RM
+      for (const set of isPhaseItem(it) ? [] : it.sets || []) {
         const v = e1rm(set.weight, set.reps, set.rir);
         if (v && (!best || v > best.e1rm)) best = { e1rm: v, weight: num(set.weight), reps: num(set.reps), rir: num(set.rir) };
       }
-      rows.push({ date: s.date, sessionId: s.id, sets: (it.sets || []).filter(isWorkSet), best });
+      rows.push({ date: s.date, sessionId: s.id, sets: (it.sets || []).filter(isWorkSet), best, phase: isPhaseItem(it) });
     }
   }
   return rows.sort((a, b) => (a.date < b.date ? -1 : 1));
 }
 
-export function lastPerformance(sessions, exerciseId, beforeDate, excludeSessionId) {
+// Las series ligeras del calentamiento no deben marcar el peso del bloque principal (ni al revés):
+// se busca primero una vez hecha en el mismo papel y, si no hay, cualquiera.
+export function lastPerformance(sessions, exerciseId, beforeDate, excludeSessionId, phase = false) {
   const h = exerciseHistory(sessions.filter((s) => s.id !== excludeSessionId && s.date <= beforeDate), exerciseId)
     .filter((r) => r.sets.length);
-  return h.length ? h[h.length - 1] : null;
+  const same = h.filter((r) => r.phase === phase);
+  const pool = same.length ? same : h;
+  return pool.length ? pool[pool.length - 1] : null;
 }
 
 // Cambio % del mejor 1RM estimado: últimas 4 semanas vs las 4 anteriores, por músculo principal.
@@ -119,7 +125,7 @@ export function muscleProgress(sessions, muscle) {
   for (const s of sessions) {
     if (s.date < start || s.date > today) continue;
     for (const it of activeItems(s)) {
-      if (!(it.primary || []).includes(muscle)) continue;
+      if (isPhaseItem(it) || !(it.primary || []).includes(muscle)) continue;
       const e = (byEx[it.exerciseId] ||= { recent: 0, prev: 0 });
       for (const set of it.sets || []) {
         const v = e1rm(set.weight, set.reps, set.rir) || 0;
@@ -137,6 +143,7 @@ export function recentPRs(sessions, limit = 6) {
   const best = {}; const prs = [];
   for (const s of asc) {
     for (const it of activeItems(s)) {
+      if (isPhaseItem(it)) continue;
       let top = null;
       for (const set of it.sets || []) {
         const v = e1rm(set.weight, set.reps, set.rir);
@@ -162,7 +169,7 @@ export function weekStreak(sessions) {
 export function lastTrained(sessions) {
   const out = {};
   for (const s of sessions) for (const it of activeItems(s)) {
-    if (!(it.sets || []).some(isWorkSet)) continue;
+    if (!countsForVolume(it) || !(it.sets || []).some(isWorkSet)) continue;
     for (const m of it.primary || []) if (!out[m] || out[m] < s.date) out[m] = s.date;
   }
   return out;

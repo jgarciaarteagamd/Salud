@@ -4,7 +4,7 @@ import { muscleShort } from '../muscles.js';
 import { celebrationMessage } from '../ai.js';
 import {
   completedSessions, activeItems, isWorkSet, e1rm, num, fmtNum, sessionSetCount, sessionVolume,
-  sessionMuscles, weekStreak, todayKey, fmtSet,
+  sessionMuscles, weekStreak, todayKey, fmtSet, isPhaseItem,
 } from '../stats.js';
 import { Sheet, Thinking } from '../ui.js';
 const { html, useState, useEffect } = window.htmPreact;
@@ -15,7 +15,7 @@ export function sessionAchievements(session, allSessions) {
   for (const s of [...prev].sort((a, b) => (a.date < b.date ? -1 : 1))) {
     for (const it of activeItems(s)) {
       const sets = (it.sets || []).filter(isWorkSet);
-      if (!sets.length) continue;
+      if (!sets.length || isPhaseItem(it)) continue;
       for (const x of sets) { const v = e1rm(x.weight, x.reps, x.rir); if (v) best[it.exerciseId] = Math.max(best[it.exerciseId] || 0, v); }
       last[it.exerciseId] = sets;
     }
@@ -23,7 +23,7 @@ export function sessionAchievements(session, allSessions) {
   const prs = []; const better = []; const firsts = [];
   for (const it of activeItems(session)) {
     const sets = (it.sets || []).filter(isWorkSet);
-    if (!sets.length) continue;
+    if (!sets.length || isPhaseItem(it)) continue;
     const top = Math.max(0, ...sets.map((x) => e1rm(x.weight, x.reps, x.rir) || 0));
     if (!last[it.exerciseId]) { firsts.push(it.name); continue; }
     if (top && best[it.exerciseId] && top > best[it.exerciseId] * 1.005) {

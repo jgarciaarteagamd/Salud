@@ -9,7 +9,7 @@ App para registrar las sesiones de gimnasio en Forus. Claude arma la sesión del
 | Pestaña | Qué hace |
 |---|---|
 | **Inicio** | Mapa muscular (frente y espalda) coloreado por series de la semana, promedio de 4 semanas o cambio de fuerza. Al tocar un músculo ves sus series por semana frente al rango objetivo y el 1RM estimado de cada ejercicio. También muestra indicadores, composición corporal y récords. |
-| **Hoy** | **Configurar sesión con Claude**: indicas tiempo, energía, dolor de rodilla y de espalda, y el enfoque que prefieres. Cada ejercicio tiene una tabla donde cada fila es una serie (reps, peso, RIR). Puedes sustituir (con motivo), omitir (con motivo), agregar ejercicios, usar el temporizador de descanso y cerrar con **Guardar sesión**. El borrador se sincroniza mientras entrenas. |
+| **Hoy** | **Configurar sesión con Claude**: indicas tiempo, energía, dolor de rodilla y de espalda, y el enfoque que prefieres. La sesión se divide en **Calentamiento**, **Bloque principal** y **Vuelta a la calma**; en las tres, cada ejercicio tiene su dibujo, su ficha (cómo se hace) y una tabla donde cada fila es una serie (reps o segundos, peso, RIR). Lo del calentamiento y la vuelta a la calma no suma series al músculo ni cuenta para récords. Puedes sustituir (con motivo), omitir (con motivo), agregar ejercicios, usar el temporizador de descanso y cerrar con **Guardar sesión**. El borrador se sincroniza mientras entrenas. |
 | **Historial** | Sesiones guardadas por mes, con marcas de lo omitido, sustituido o agregado. Cualquier sesión se puede abrir, corregir o eliminar. |
 | **Cuerpo** | Medidas (antropometría, bioimpedancia, Samsung Watch) y nutrición (Fitia). Subes la captura, Claude extrae los valores, los revisas y guardas. También se pueden cargar a mano. |
 | **Más** | Catálogo de ejercicios (crear, editar, eliminar, subir dibujo, prompt de Higgsfield), perfil para Claude y resumen para el proyecto Mi Salud. |
@@ -25,7 +25,7 @@ Los datos viven en la base de datos del artifact y se sincronizan entre disposit
 | Colección | Contenido |
 |---|---|
 | `exercises/{id}` | `name`, `primary[]`, `secondary[]`, `equipment`, `knee`/`back` (`ok`·`precaucion`·`evitar`), `cues`, `image` o `imageAsset` |
-| `sessions/{id}` | `date`, `status` (`plan`·`en_curso`·`guardada`), `title`, `plan` (razonamiento, calentamiento, precauciones), `checkin`, `items[]` (cada uno con `sets[]` de `{reps, weight, rir, done}`), `post` (RPE, dolor al terminar), `editLog[]` |
+| `sessions/{id}` | `date`, `status` (`plan`·`en_curso`·`guardada`), `title`, `plan` (razonamiento, calentamiento, precauciones), `checkin`, `items[]` (cada uno con `sets[]` de `{reps, weight, rir, done}` y `fase`: `calentamiento`·`enfriamiento`, o sin `fase` si es del bloque principal), `post` (RPE, dolor al terminar), `editLog[]` |
 | `measurements/{id}` | `date`, `tipo`, `valores{}` (ver `app/js/fields.js`), `imagenes[]` |
 | `nutrition/{id}` | `date`, `valores{kcal, proteina, carbohidratos, grasa…}`, `imagenes[]` |
 | `profile/main` | Datos personales, objetivo, antecedentes y el contexto pegado desde Mi Salud |
