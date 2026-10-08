@@ -30,7 +30,7 @@ function App() {
   const ready = ['exercises', 'sessions', 'profile'].every((k) => st.loaded[k]);
 
   let view;
-  if (!ready) view = html`<div class="boot"><p class="boot-mark">FORUS LOG</p><p class="muted">Sincronizando…</p></div>`;
+  if (!ready) view = html`<div class="boot"><p class="boot-mark">FITNESS LOG</p><p class="muted">Sincronizando…</p></div>`;
   else if (tab === 'hoy') view = html`<${TodayView} go=${go} />`;
   else if (tab === 'historial') view = html`<${HistoryView} go=${go} param=${param} />`;
   else if (tab === 'cuerpo') view = html`<${BodyView} go=${go} />`;
@@ -40,7 +40,7 @@ function App() {
   return html`
     <div class="shell">
       <div class="topbar">
-        <div class="brand"><span class="brand-dot"></span>FORUS LOG</div>
+        <div class="brand"><span class="brand-dot"></span>FITNESS LOG</div>
         <div class=${'sync' + (st.mode === 'cloud' && !st.error ? '' : ' off')} title=${st.error || ''}>
           <i></i>${st.mode === 'cloud' ? (st.error ? 'Problema al sincronizar' : 'Sincronizado') : 'Solo en este dispositivo'}
         </div>

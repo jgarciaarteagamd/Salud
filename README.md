@@ -1,4 +1,4 @@
-# Forus Log
+# Fitness Log
 
 App para registrar las sesiones de gimnasio en Forus. Claude arma la sesión del día según tu historial, tus antecedentes de rodilla derecha y espalda, tus medidas y tu nutrición. Tú registras cada serie (repeticiones, peso, RIR) y ves tu progreso en un mapa muscular.
 

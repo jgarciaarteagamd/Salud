@@ -145,7 +145,7 @@ function Profile() {
       <label class="field"><span>Preferencias</span><input id="pf-pref" class="input" value=${p.preferencias ?? ''} onInput=${up('preferencias')} placeholder="Ejercicios que te gustan o evitas" /></label>
       <div class="panel stack-sm">
         <span class="eyebrow">Contexto de Mi Salud</span>
-        <p class="small">Esta app no puede leer la memoria de tu proyecto Mi Salud. Pídele allí: <i>“Resúmeme en un texto mis antecedentes, mis avances de entrenamiento, mis antropometrías y lo que debo cuidar, para pegarlo en Forus Log”</i>, y pega la respuesta aquí.</p>
+        <p class="small">Esta app no puede leer la memoria de tu proyecto Mi Salud. Pídele allí: <i>“Resúmeme en un texto mis antecedentes, mis avances de entrenamiento, mis antropometrías y lo que debo cuidar, para pegarlo en Fitness Log”</i>, y pega la respuesta aquí.</p>
         <textarea id="pf-ctx" class="textarea" style="min-height:140px" value=${p.contextoMiSalud ?? ''} onInput=${up('contextoMiSalud')}></textarea>
       </div>
       <button class="btn btn-primary" onClick=${async () => { await saveProfile(p); toast('Perfil guardado'); }}>Guardar perfil</button>
@@ -161,7 +161,7 @@ function Export() {
     try {
       const dl = await window.claude?.use?.('downloads');
       if (!dl) { toast('Descarga no disponible en esta vista'); return; }
-      await dl.save({ filename: `forus-log-${todayKey()}.json`, data });
+      await dl.save({ filename: `fitness-log-${todayKey()}.json`, data });
     } catch (e) { if (e?.code !== 'declined') toast('No se pudo descargar'); }
   }
   return html`

@@ -187,7 +187,7 @@ export function miSaludSummary({ profile, sessions, measurements, nutrition, day
   const done = completedSessions(sessions).filter((s) => s.date >= since);
   const sets = setsByMuscle(done, since, todayKey());
   const lines = [];
-  lines.push(`RESUMEN FORUS LOG — ${since} a ${todayKey()}`);
+  lines.push(`RESUMEN FITNESS LOG — ${since} a ${todayKey()}`);
   lines.push(`Sesiones: ${done.length}`);
   lines.push('');
   lines.push('Series por músculo:');
