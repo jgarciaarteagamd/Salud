@@ -8,7 +8,7 @@ import {
 } from '../fields.js';
 import { extractMeasurements, extractNutrition, imageLimits, errorCopy, microStats } from '../ai.js';
 import { todayKey, fmtShort, fmtDay, fmtNum, num, addDays, dateKey, daysBetween } from '../stats.js';
-import { Icon, Sheet, LineChart, Thinking, Confirm, toast } from '../ui.js';
+import { Icon, Sheet, LineChart, Thinking, Confirm, toast, FilePick } from '../ui.js';
 const { html, useState, useEffect, useMemo, useRef } = window.htmPreact;
 
 function EntrySheet({ kind, entry, weekly, onClose }) {
@@ -36,7 +36,6 @@ function EntrySheet({ kind, entry, weekly, onClose }) {
   useEffect(() => { imageLimits().then(setImgCaps); }, []);
   useEffect(() => { const urls = files.map((f) => URL.createObjectURL(f)); setPreviews(urls); return () => urls.forEach((u) => URL.revokeObjectURL(u)); }, [files]);
 
-  const pick = (e) => { const fl = [...(e.target.files || [])].slice(0, imgCaps?.maxCount || 6); setFiles(fl); setErr(''); };
 
   async function read() {
     if (!files.length) return;
@@ -104,7 +103,7 @@ function EntrySheet({ kind, entry, weekly, onClose }) {
       <div class="panel stack-sm">
         <span class="eyebrow">Capturas</span>
         <p class="small muted">${isWeek ? 'Captura del “Score nutricional” de la semana en Fitia (puedes subir varias pantallas).' : isNut ? 'Captura del resumen del día en Fitia.' : 'Informe de antropometría, app de la báscula o Samsung Health.'}${imgCaps ? ' Claude leerá los valores.' : ' En esta vista Claude no puede leer imágenes; se guardan como respaldo.'}</p>
-        <input id="en-files" type="file" accept="image/*" multiple onChange=${pick} />
+        <${FilePick} id="en-files" count=${files.length} onPick=${(fl) => { setFiles(fl.slice(0, imgCaps?.maxCount || 6)); setErr(''); }} />
         ${previews.length ? html`<div class="thumbs">${previews.map((u) => html`<img src=${u} alt="Captura seleccionada" />`)}</div>` : null}
         ${entry?.imagenes?.length ? html`<div class="thumbs">${entry.imagenes.map((id) => html`<img src=${assetUrl(id)} alt="Captura guardada" />`)}</div>` : null}
         ${files.length && imgCaps ? (busy === 'read'

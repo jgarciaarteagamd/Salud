@@ -254,6 +254,36 @@ export async function planSession(ctx, { signal, onText } = {}) {
 }
 
 /* ---------- lectura de capturas ---------- */
+// La plataforma reduce cada imagen a ~1,2 megapíxeles. Una captura larga (con desplazamiento, p. ej. 1080×6240)
+// quedaría ilegible, así que se corta en partes de proporción normal, con un pequeño solapamiento.
+const SPLIT_NOTE = '\nSi recibes varias imágenes, pueden ser partes consecutivas de una misma captura larga que se solapan un poco: no cuentes dos veces un mismo dato.';
+async function loadImage(file) {
+  const url = URL.createObjectURL(file);
+  try { const img = new Image(); img.src = url; await img.decode(); return img; } finally { setTimeout(() => URL.revokeObjectURL(url), 0); }
+}
+export async function prepareImages(files) {
+  const list = [...(files || [])];
+  const max = (await imageLimits())?.maxCount || 5;
+  const loaded = await Promise.all(list.map((f) => loadImage(f).catch(() => null)));
+  const want = loaded.map((img) => (img && img.naturalHeight > img.naturalWidth * 1.8 ? Math.ceil(img.naturalHeight / (img.naturalWidth * 1.2)) : 1));
+  while (want.reduce((a, b) => a + b, 0) > max && want.some((n) => n > 1)) want[want.indexOf(Math.max(...want))]--;
+  const out = [];
+  for (let i = 0; i < list.length; i++) {
+    const img = loaded[i]; const n = want[i];
+    if (!img || n <= 1) { out.push(list[i]); continue; }
+    const scale = Math.min(1, 1200 / img.naturalWidth);
+    const w = Math.round(img.naturalWidth * scale);
+    const step = img.naturalHeight / n; const overlap = Math.round(img.naturalWidth * 0.08);
+    for (let k = 0; k < n; k++) {
+      const y0 = Math.max(0, Math.round(k * step - overlap)); const y1 = Math.min(img.naturalHeight, Math.round((k + 1) * step + overlap));
+      const c = document.createElement('canvas'); c.width = w; c.height = Math.round((y1 - y0) * scale);
+      c.getContext('2d').drawImage(img, 0, y0, img.naturalWidth, y1 - y0, 0, 0, c.width, c.height);
+      out.push(await new Promise((res) => c.toBlob(res, 'image/jpeg', 0.9)));
+    }
+  }
+  return out.filter(Boolean).slice(0, max);
+}
+
 export async function extractMeasurements(files, hint, { signal } = {}) {
   const sample = await getSample();
   if (!sample) throw { code: 'not_granted' };
@@ -263,7 +293,7 @@ Extrae los valores numéricos que aparezcan. Usa estas claves cuando el dato cor
 ${keys}
 Convierte a las unidades indicadas (lb→kg, in→cm). No inventes valores que no se vean.
 Responde SOLO con JSON: {"fecha": "AAAA-MM-DD o null", "tipo": "antropometria|bioimpedancia|reloj", "valores": {"peso": 78.4}, "otros": [{"nombre": "...", "valor": 1.2, "unidad": "..."}], "resumen": "1 frase de lo más relevante"}`;
-  return sample.json(prompt, { images: files, modelTier: 'default', cache: false, signal });
+  return sample.json(prompt + SPLIT_NOTE, { images: await prepareImages(files), modelTier: 'default', cache: false, signal });
 }
 
 export async function extractNutrition(files, { signal, weekly } = {}) {
@@ -280,7 +310,7 @@ ${wkeys}
 En "fortalezas" y "mejoras" copia en frases cortas lo que la app destaca como bien y por mejorar.${weekly ? '\nEl usuario indicó que es el resumen semanal.' : ''}
 Usa el año ${new Date().getFullYear()} si la captura no lo muestra. No inventes valores que no se vean.
 Responde SOLO con JSON: {"fecha": "AAAA-MM-DD o null", "fechaFin": "AAAA-MM-DD o null", "periodo": "dia|semana", "valores": {"kcal": 2100, "proteina": 150, "vitD": 10}, "metas": {"fibra": 38, "vitD": 15, "grasaSat": 23}, "calidad": "Regular o null", "fortalezas": ["..."], "mejoras": ["..."], "resumen": "1 frase"}`;
-  return sample.json(prompt, { images: files, modelTier: 'default', cache: false, signal });
+  return sample.json(prompt + SPLIT_NOTE, { images: await prepareImages(files), modelTier: 'default', cache: false, signal });
 }
 
 export async function extractActivity(files, { signal } = {}) {
@@ -294,7 +324,7 @@ Convierte la duración a minutos con decimales (46:56 = 46.93). "activoMin" es e
 Si hay una tabla de largos o vueltas (splits), copia cada fila en "largos" con el tiempo y el descanso tal como aparecen.
 Usa el año ${new Date().getFullYear()} si la captura no lo muestra. No inventes valores que no se vean.
 Responde SOLO con JSON: {"fecha": "AAAA-MM-DD o null", "hora": "HH:MM o null", "actividad": "nombre tal como aparece (p. ej. Piscina, Circuito entrenamiento, Máquinas de musculación)", "tipo": "${Object.keys(ACTIVITY_TYPES).join('|')}", "lugar": "Piscina, Parque… o null", "valores": {"distancia": 550, "duracionMin": 46.93}, "ritmo": "texto del ritmo medio o null", "largos": [{"n": 1, "distancia": 25, "tiempo": "00:52.3", "ritmo": "03'29\\"", "descanso": "00:23.1 o null", "estilo": "Libre"}], "zonasFC": "resumen de las zonas de FC o null", "dispositivo": "Galaxy Watch6 o null", "resumen": "1 frase"}`;
-  return sample.json(prompt, { images: files, modelTier: 'default', cache: false, signal });
+  return sample.json(prompt + SPLIT_NOTE, { images: await prepareImages(files), modelTier: 'default', cache: false, signal });
 }
 
 /* ---------- resumen para el proyecto Mi Salud ---------- */
@@ -419,6 +449,6 @@ export async function askCoach(st, turns, { signal, onText, images } = {}) {
   while (recent.length && recent[0].role !== 'user') recent.shift();
   const input = recent.map((t, i) => (i === 0 ? { role: 'user', content: `${COACH_RULES}${coachContext(st)}\n\n---\nMENSAJE DEL USUARIO:\n${t.content}` } : { role: t.role, content: t.content }));
   const opts = { modelTier: 'default', cache: false, signal, onText };
-  if (images?.length) opts.images = images;
+  if (images?.length) opts.images = await prepareImages(images);
   return sample(input, opts);
 }

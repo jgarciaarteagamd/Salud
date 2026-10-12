@@ -4,7 +4,7 @@ import { uploadImage, canUpload, assetUrl } from '../store.js';
 import { extractActivity, imageLimits, errorCopy } from '../ai.js';
 import { fmtClock } from '../fields.js';
 import { fmtNum, num } from '../stats.js';
-import { Icon, Sheet, Thinking, toast } from '../ui.js';
+import { Icon, Sheet, Thinking, toast, FilePick } from '../ui.js';
 const { html, useState, useEffect, useRef } = window.htmPreact;
 
 const FIELDS = [
@@ -61,7 +61,7 @@ function WatchSheet({ value, onSave, onClose }) {
     <${Sheet} title="Datos del reloj" onClose=${() => { ctl.current?.abort(); onClose(); }}>
       <div class="panel stack-sm">
         <p class="small muted">Sube la captura del resumen del entrenamiento en Samsung Health.${imgCaps ? ' Claude leerá los datos.' : ' En esta vista Claude no puede leer imágenes; llena los valores a mano.'}</p>
-        <input id="w-files" type="file" accept="image/*" multiple onChange=${(e) => { setFiles([...(e.target.files || [])].slice(0, imgCaps?.maxCount || 4)); setErr(''); }} />
+        <${FilePick} id="w-files" count=${files.length} onPick=${(fl) => { setFiles(fl.slice(0, imgCaps?.maxCount || 4)); setErr(''); }} />
         ${previews.length ? html`<div class="thumbs">${previews.map((u) => html`<img src=${u} alt="Captura seleccionada" />`)}</div>` : null}
         ${value?.imagenes?.length ? html`<div class="thumbs">${value.imagenes.map((id) => html`<img src=${assetUrl(id)} alt="Captura guardada" />`)}</div>` : null}
         ${files.length && imgCaps ? (busy === 'read'

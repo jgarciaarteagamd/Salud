@@ -4,7 +4,7 @@ import { saveDoc, deleteDoc, newId, uploadImage, canUpload, assetUrl } from '../
 import { ACTIVITY_TYPES, ACTIVITY_FIELDS, paceLabel, fmtClock } from '../fields.js';
 import { extractActivity, imageLimits, errorCopy } from '../ai.js';
 import { todayKey, fmtDay, fmtNum, num, parseDay, DIAS_CORTOS } from '../stats.js';
-import { Icon, Sheet, Thinking, Confirm, toast } from '../ui.js';
+import { Icon, Sheet, Thinking, Confirm, toast, FilePick } from '../ui.js';
 const { html, useState, useEffect, useRef } = window.htmPreact;
 
 const SHOWN = {
@@ -92,7 +92,7 @@ export function ActivitySheet({ entry, onClose }) {
       <div class="panel stack-sm">
         <span class="eyebrow">Capturas de Samsung Health</span>
         <p class="small muted">Sube el resumen del ejercicio y, si quieres, la pantalla de largos o vueltas.${imgCaps ? ' Claude leerá los datos.' : ' En esta vista Claude no puede leer imágenes; se guardan como respaldo.'}</p>
-        <input id="ac-files" type="file" accept="image/*" multiple onChange=${(e) => { setFiles([...(e.target.files || [])].slice(0, imgCaps?.maxCount || 6)); setErr(''); }} />
+        <${FilePick} id="ac-files" count=${files.length} onPick=${(fl) => { setFiles(fl.slice(0, imgCaps?.maxCount || 6)); setErr(''); }} />
         ${previews.length ? html`<div class="thumbs">${previews.map((u) => html`<img src=${u} alt="Captura seleccionada" />`)}</div>` : null}
         ${entry?.imagenes?.length ? html`<div class="thumbs">${entry.imagenes.map((id) => html`<img src=${assetUrl(id)} alt="Captura guardada" />`)}</div>` : null}
         ${files.length && imgCaps ? (busy === 'read'

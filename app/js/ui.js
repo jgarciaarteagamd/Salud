@@ -158,6 +158,15 @@ export function BarChart({ points, height = 130, band }) {
     </svg>`;
 }
 
+// Botón para elegir capturas (el selector nativo de archivos queda oculto detrás de la etiqueta).
+export function FilePick({ id, onPick, count = 0, label = 'Elegir captura' }) {
+  return html`<div class="row">
+    <label class="btn" style="cursor:pointer"><${Icon} name="camera" size="18" /> ${count ? 'Cambiar captura' : label}
+      <input id=${id} type="file" accept="image/*" multiple class="sr" onChange=${(e) => { const fl = [...(e.target.files || [])]; e.target.value = ''; onPick(fl); }} /></label>
+    ${count ? html`<span class="small muted">${count} ${count === 1 ? 'captura lista' : 'capturas listas'}</span>` : null}
+  </div>`;
+}
+
 export function Thinking({ text = 'Claude está pensando…' }) {
   return html`<div class="thinking"><span class="pulse"></span><span>${text}</span></div>`;
 }
