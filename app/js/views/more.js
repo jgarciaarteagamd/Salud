@@ -155,9 +155,9 @@ function Profile() {
 function Export() {
   const st = useStore();
   const [days, setDays] = useState(14);
-  const text = useMemo(() => miSaludSummary({ ...st, days }), [st.sessions, st.measurements, st.nutrition, st.profile, days]);
+  const text = useMemo(() => miSaludSummary({ ...st, days }), [st.sessions, st.measurements, st.nutrition, st.activities, st.profile, days]);
   async function backup() {
-    const data = JSON.stringify({ exportado: new Date().toISOString(), profile: st.profile, exercises: st.exercises, sessions: st.sessions, measurements: st.measurements, nutrition: st.nutrition }, null, 2);
+    const data = JSON.stringify({ exportado: new Date().toISOString(), profile: st.profile, exercises: st.exercises, sessions: st.sessions, measurements: st.measurements, nutrition: st.nutrition, activities: st.activities, chats: st.chats }, null, 2);
     try {
       const dl = await window.claude?.use?.('downloads');
       if (!dl) { toast('Descarga no disponible en esta vista'); return; }

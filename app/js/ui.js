@@ -25,6 +25,10 @@ const P = {
   note: 'M5 4h14v16H5zM9 9h6M9 13h6M9 17h3',
   image: 'M4 5h16v14H4zM4 16l5-5 4 4 3-3 4 4M15 9h.01',
   download: 'M12 4v11M7 10l5 5 5-5M5 20h14',
+  chat: 'M4 5h16v11H9l-5 4zM8 9h8M8 12h5',
+  swim: 'M2 18c2 0 2-1.5 4-1.5s2 1.5 4 1.5 2-1.5 4-1.5 2 1.5 4 1.5 2-1.5 4-1.5M8 14l3-5 4 2 2-3M17 5a1.5 1.5 0 1 0 0 .01',
+  send: 'M4 12l16-8-6 16-3-7z',
+  stop: 'M7 7h10v10H7z',
 };
 export function Icon({ name, size }) {
   return html`<svg viewBox="0 0 24 24" width=${size || 20} height=${size || 20} fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d=${P[name]} /></svg>`;

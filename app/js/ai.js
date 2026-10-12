@@ -1,11 +1,16 @@
 // Todo lo que se le pide a Claude desde la app. Cada llamada es independiente: el contexto
 // (perfil, historial, medidas) se arma aquí y viaja completo en el prompt.
 import { MUSCLES, muscleName, rangesFor } from './muscles.js';
-import { MEASURE_FIELDS, NUTRITION_FIELDS, MEASURE_TYPES, mergeMeasurementsByDate, SOURCE_SHORT } from './fields.js';
+import {
+  MEASURE_FIELDS, NUTRITION_FIELDS, WEEKLY_FIELDS, MEASURE_TYPES, mergeMeasurementsByDate, SOURCE_SHORT,
+  ACTIVITY_TYPES, ACTIVITY_FIELDS, isWeekly, paceLabel,
+} from './fields.js';
 import {
   completedSessions, setsByMuscle, todayKey, dateKey, addDays, lastTrained, lastPerformance,
   activeItems, isWorkSet, fmtNum, num, fmtSet, sessionSetCount, sessionVolume, recentPRs,
 } from './stats.js';
+
+const FASE_TAG = { calentamiento: ' [CALENTAMIENTO]', enfriamiento: ' [VUELTA A LA CALMA]' };
 
 let samplePromise = null;
 export function getSample() {
@@ -53,9 +58,9 @@ function profileBlock(p = {}) {
 function sessionLine(s) {
   const parts = [];
   for (const it of s.items || []) {
-    if (it.status === 'omitido') { parts.push(`  - OMITIDO ${it.name}${it.reason ? ` (motivo: ${it.reason})` : ''}`); continue; }
+    if (it.status === 'omitido') { parts.push(`  - OMITIDO ${it.name}${FASE_TAG[it.fase] || ''}${it.reason ? ` (motivo: ${it.reason})` : ''}`); continue; }
     const sets = (it.sets || []).filter(isWorkSet).map((x) => `${fmtSet(x)}${num(x.weight) ? 'kg' : ''}${x.rir !== '' && x.rir != null ? ` RIR${x.rir}` : ''}`).join(', ');
-    let tag = '';
+    let tag = FASE_TAG[it.fase] || '';
     if (it.status === 'sustituido') tag = ` [SUSTITUYÓ a ${it.replacedFrom?.name || '?'}${it.reason ? `; motivo: ${it.reason}` : ''}]`;
     if (it.origin === 'agregado') tag += ' [AGREGADO por el usuario]';
     parts.push(`  - ${it.name}${tag}: ${sets || 'sin series registradas'}${it.note ? ` · nota: ${it.note}` : ''}`);
@@ -64,8 +69,8 @@ function sessionLine(s) {
   return `${s.date} — ${s.lugar === 'freeletics' ? '[Freeletics en casa] ' : ''}${s.title || 'Sesión'}${post}\n${parts.join('\n')}`;
 }
 
-function measurementsBlock(measurements) {
-  const days = mergeMeasurementsByDate(measurements).reverse().slice(0, 4);
+function measurementsBlock(measurements, limit = 4) {
+  const days = mergeMeasurementsByDate(measurements).reverse().slice(0, limit);
   if (!days.length) return 'Sin medidas registradas.';
   return days.map((d) => {
     const vals = MEASURE_FIELDS.filter((f) => d.valores[f.key] != null).map((f) => `${f.label} ${d.valores[f.key]}${f.unit ? ` ${f.unit}` : ''} [${SOURCE_SHORT[d.fuente[f.key]] || d.fuente[f.key]}]`).join(', ');
@@ -75,25 +80,63 @@ function measurementsBlock(measurements) {
 
 function nutritionBlock(nutrition) {
   const since = dateKey(addDays(new Date(), -7));
-  const recent = nutrition.filter((n) => n.date >= since);
-  if (!recent.length) return 'Sin registros de nutrición en los últimos 7 días.';
+  const recent = nutrition.filter((n) => !isWeekly(n) && n.date >= since);
+  const week = weeklyBlock(nutrition, 1);
+  if (!recent.length) return 'Sin registros diarios de nutrición en los últimos 7 días.' + (week ? `\n${week}` : '');
   const avg = (k) => { const v = recent.map((n) => num(n.valores?.[k])).filter((x) => x != null); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
-  return NUTRITION_FIELDS.map((f) => { const a = avg(f.key); return a == null ? null : `${f.label} promedio ${fmtNum(a, 0)} ${f.unit}`; }).filter(Boolean).join(', ') + ` (${recent.length} días registrados)`;
+  return NUTRITION_FIELDS.map((f) => { const a = avg(f.key); return a == null ? null : `${f.label} promedio ${fmtNum(a, 0)} ${f.unit}`; }).filter(Boolean).join(', ')
+    + ` (${recent.length} de 7 días registrados; los días sin registro no son ayuno, solo no se anotaron)` + (week ? `\n${week}` : '');
+}
+
+function weeklyBlock(nutrition, limit = 4) {
+  const weeks = nutrition.filter(isWeekly).sort((a, b) => (a.date < b.date ? 1 : -1)).slice(0, limit);
+  return weeks.map((w) => {
+    const vals = WEEKLY_FIELDS.filter((f) => w.valores?.[f.key] != null).map((f) => `${f.label} ${w.valores[f.key]}${f.unit ? ` ${f.unit}` : ''}`).join(', ');
+    return `Score nutricional semanal de Fitia ${w.date}${w.dateEnd ? ` a ${w.dateEnd}` : ''}: ${vals}${w.notas ? ` · ${w.notas}` : ''}`;
+  }).join('\n');
+}
+
+// Tabla compacta de días de Fitia, para el chat.
+function nutritionDays(nutrition, days = 45) {
+  const since = dateKey(addDays(new Date(), -days));
+  const rows = nutrition.filter((n) => !isWeekly(n) && n.date >= since).sort((a, b) => (a.date < b.date ? -1 : 1));
+  if (!rows.length) return 'Sin registros diarios.';
+  const v = (n, k) => (n.valores?.[k] == null ? '-' : n.valores[k]);
+  return 'fecha | kcal/meta | proteína/meta g | carbos/meta g | grasa/meta g | fibra g | grasa sat g | azúcar g | sal g\n'
+    + rows.map((n) => `${n.date} | ${v(n, 'kcal')}/${v(n, 'kcalObjetivo')} | ${v(n, 'proteina')}/${v(n, 'proteinaObjetivo')} | ${v(n, 'carbohidratos')}/${v(n, 'carbObjetivo')} | ${v(n, 'grasa')}/${v(n, 'grasaObjetivo')} | ${v(n, 'fibra')} | ${v(n, 'grasaSat')} | ${v(n, 'azucar')} | ${v(n, 'sal')}${n.valores?.alcohol ? ` | alcohol ${n.valores.alcohol} g` : ''}${n.notas && !n.notas.startsWith('Importado') ? ` | nota: ${n.notas}` : ''}`).join('\n');
+}
+
+export function activityLine(a) {
+  const v = a.valores || {};
+  const parts = ACTIVITY_FIELDS.filter((f) => v[f.key] != null).map((f) => `${f.label} ${fmtNum(Number(v[f.key]), 1)}${f.unit ? ` ${f.unit}` : ''}`);
+  const pace = paceLabel(a); if (pace) parts.push(`ritmo ${pace}`);
+  const largos = (a.largos || []).length ? `\n    largos: ${a.largos.map((l) => `${l.n}) ${l.tiempo}${l.descanso ? ` (descanso ${l.descanso})` : ''}`).join(', ')}` : '';
+  return `${a.date}${a.hora ? ` ${a.hora}` : ''} — ${ACTIVITY_TYPES[a.tipo] || a.tipo}${a.lugar ? ` (${a.lugar})` : ''}: ${parts.join(', ')}${a.notas ? ` · nota: ${a.notas}` : ''}${largos}`;
+}
+
+function activitiesBlock(activities = [], days = 14) {
+  const since = dateKey(addDays(new Date(), -days));
+  const list = activities.filter((a) => a.date >= since).sort((a, b) => (a.date < b.date ? 1 : -1));
+  return list.length ? list.map(activityLine).join('\n') : `Sin actividades de cardio en los últimos ${days} días.`;
 }
 
 export const modalidadOf = (e) => e?.modalidad || 'forus';
 
-function catalogBlock(exercises, sessions, lugar) {
+// Movilidad, estiramientos y cardio sirven en cualquier lugar para calentar o enfriar:
+// además del catálogo del lugar, se ofrecen los de la otra modalidad que sean de ese tipo.
+const isWarmupKind = (e) => ['movilidad', 'cardio'].includes(e.categoria);
+
+function catalogBlock(exercises, sessions, lugar, { warmupOnly = false } = {}) {
   const today = todayKey();
-  return exercises.filter((e) => !e.archived && modalidadOf(e) === lugar).map((e) => {
-    const lp = lastPerformance(sessions, e.id, today);
+  return exercises.filter((e) => !e.archived && (warmupOnly ? modalidadOf(e) !== lugar && isWarmupKind(e) : modalidadOf(e) === lugar)).map((e) => {
+    const lp = lastPerformance(sessions, e.id, today, null, warmupOnly);
     const last = lp ? ` · última vez ${lp.date}: ${lp.sets.map(fmtSet).join(', ')}` : '';
     const extra = [e.medida === 'tiempo' && 'se mide en segundos', e.unilateral && 'por lado (I/D)', e.categoria && e.categoria !== 'fuerza' && e.categoria, e.cues && `nota: ${e.cues}`].filter(Boolean).join('; ');
     return `${e.id} | ${e.nombreEs ? `${e.name} (${e.nombreEs})` : e.name} | principal: ${(e.primary || []).join(',')} | secundario: ${(e.secondary || []).join(',')} | rodilla: ${e.knee || 'ok'} | espalda: ${e.back || 'ok'}${extra ? ` | ${extra}` : ''}${last}`;
   }).join('\n');
 }
 
-export function buildPlanPrompt({ profile, exercises, sessions, measurements, nutrition, checkin }) {
+export function buildPlanPrompt({ profile, exercises, sessions, measurements, nutrition, activities, checkin }) {
   const done = completedSessions(sessions).filter((s) => s.date !== todayKey() || s.status === 'guardada');
   const today = todayKey();
   const w1 = setsByMuscle(done, dateKey(addDays(new Date(), -6)), today);
@@ -104,6 +147,7 @@ export function buildPlanPrompt({ profile, exercises, sessions, measurements, nu
   const history = done.slice(0, 10).map(sessionLine).join('\n\n') || 'Aún no hay sesiones registradas.';
   const lugar = checkin.lugar || 'forus';
   const fl = lugar === 'freeletics';
+  const warmCatalog = catalogBlock(exercises, done, lugar, { warmupOnly: true });
 
   return `Eres el entrenador personal de esta persona. ${fl
     ? `Diseña una sesión de HOY (${today}) en casa, estilo Freeletics: solo peso corporal, sin equipamiento. Complementa sus sesiones de gimnasio en Forus (no las reemplaza).`
@@ -127,6 +171,9 @@ HISTORIAL RECIENTE (más reciente primero)
 Los ejercicios OMITIDOS, SUSTITUIDOS o AGREGADOS muestran lo que pasó realmente en el gimnasio: máquinas ocupadas, falta de tiempo, molestias o tiempo extra. Úsalo para ajustar: si una máquina suele estar ocupada, ofrece la alternativa; si se omite por tiempo, ajusta el volumen; si hubo dolor, baja la carga o cambia el ejercicio.
 ${history}
 
+CARDIO Y OTRAS ACTIVIDADES (Samsung Health; no cuentan como series de fuerza, pero sí como fatiga)
+${activitiesBlock(activities)}
+
 MEDIDAS CORPORALES RECIENTES
 ${measurementsBlock(measurements)}
 
@@ -135,18 +182,23 @@ ${nutritionBlock(nutrition)}
 
 CATÁLOGO DE EJERCICIOS ${fl ? 'FREELETICS (peso corporal)' : 'DE FORUS'} (id | nombre | músculos | aptitud rodilla/espalda | detalles | última vez)
 ${catalogBlock(exercises, done, lugar)}
-
+${warmCatalog ? `
+MOVILIDAD, ESTIRAMIENTOS Y CARDIO (sirven en cualquier lugar, para calentar o enfriar)
+${warmCatalog}
+` : ''}
 REGLAS
 - Prioriza los músculos por debajo de su rango semanal y los que llevan más días sin trabajarse; evita repetir un grupo trabajado fuerte hace menos de 48 h.
+- Si en las últimas 24-48 h hubo natación u otro cardio exigente, tenlo en cuenta: la natación carga hombros y dorsales, así que modera el volumen de esos grupos ese día.
 - Protege rodilla derecha y espalda: con dolor ≥4/10 evita ejercicios marcados "precaucion" para esa zona o reduce rango y carga; nunca uses "evitar". Explica la precaución concreta.
-${fl ? '- Peso corporal: "peso" siempre null. Progresa con más repeticiones, más segundos, tempo más lento o una variante más difícil del catálogo. Para ejercicios medidos en segundos usa "segundos" y deja "reps" en null. Indica en la nota si es por lado.\n- Incluye calentamiento de movilidad y cierre con estiramientos del catálogo cuando quepa en el tiempo.' : '- Progresión: si la última vez cumplió las repeticiones con RIR ≥2, sube la carga ~2.5-5%; si no, mantenla. Sugiere el peso en kg cuando haya historial; si no lo hay, deja peso en null.'}
+${fl ? '- Peso corporal: "peso" siempre null. Progresa con más repeticiones, más segundos, tempo más lento o una variante más difícil del catálogo. Para ejercicios medidos en segundos usa "segundos" y deja "reps" en null. Indica en la nota si es por lado.\n- Incluye calentamiento de movilidad y cierre con estiramientos cuando quepa en el tiempo.' : '- Progresión: si la última vez cumplió las repeticiones con RIR ≥2, sube la carga ~2.5-5%; si no, mantenla. Sugiere el peso en kg cuando haya historial; si no lo hay, deja peso en null.'}
 - La sesión debe caber en el tiempo disponible contando calentamiento y descansos.
+- El calentamiento y la vuelta a la calma también son ejercicios, con la misma forma que los del bloque: cada uno se muestra con su dibujo y su explicación. Elige del catálogo (movilidad, estiramientos, cardio o series ligeras de aproximación de un ejercicio del bloque). Cardio y estiramientos sostenidos van en "segundos" (5 min = 300) con "reps" null; normalmente 1 serie y "descansoSeg" 0. Para series de aproximación pon el peso ligero en "peso".
 - Usa ejercicios del catálogo por su id. Solo si hace falta uno que no existe, ponlo en "nuevo" con exerciseId null.
 - Escribe en español, breve y directo.
 
 Responde SOLO con un JSON con esta forma exacta:
-{"titulo": "Torso — empuje y espalda", "enfoque": ["pecho","dorsales"], "razonamiento": "2-4 frases de por qué esta sesión hoy", "calentamiento": ["5 min bicicleta", "..."], "ejercicios": [{"exerciseId": "press-pecho-maquina", "nuevo": null, "series": 3, "reps": "8-10", "segundos": null, "peso": 40, "rir": 2, "descansoSeg": 90, "nota": "consejo corto"}], "vuelta_calma": ["..."], "precauciones": ["..."]}
-Para un ejercicio nuevo: "exerciseId": null, "nuevo": {"name": "...", "primary": ["id_musculo"], "secondary": [], "equipment": "...", "knee": "ok|precaucion|evitar", "back": "ok|precaucion|evitar"}. Ids de músculo válidos: ${MUSCLES.map((m) => m.id).join(', ')}.`;
+{"titulo": "Torso — empuje y espalda", "enfoque": ["pecho","dorsales"], "razonamiento": "2-4 frases de por qué esta sesión hoy", "calentamiento": [{"exerciseId": "${fl ? 'fl-cat-cow' : 'eliptica'}", "nuevo": null, "series": 1, "reps": null, "segundos": ${fl ? 60 : 300}, "peso": null, "rir": null, "descansoSeg": 0, "nota": "ritmo suave"}], "ejercicios": [{"exerciseId": "press-pecho-maquina", "nuevo": null, "series": 3, "reps": "8-10", "segundos": null, "peso": 40, "rir": 2, "descansoSeg": 90, "nota": "consejo corto"}], "vuelta_calma": [{"exerciseId": "...", "nuevo": null, "series": 1, "reps": null, "segundos": 30, "peso": null, "rir": null, "descansoSeg": 0, "nota": "..."}], "precauciones": ["..."]}
+Para un ejercicio nuevo: "exerciseId": null, "nuevo": {"name": "...", "primary": ["id_musculo"], "secondary": [], "equipment": "...", "knee": "ok|precaucion|evitar", "back": "ok|precaucion|evitar", "categoria": "fuerza|movilidad|cardio", "medida": "reps|tiempo"}. Ids de músculo válidos: ${MUSCLES.map((m) => m.id).join(', ')}.`;
 }
 
 export async function planSession(ctx, { signal, onText } = {}) {
@@ -169,20 +221,38 @@ Responde SOLO con JSON: {"fecha": "AAAA-MM-DD o null", "tipo": "antropometria|bi
   return sample.json(prompt, { images: files, modelTier: 'default', cache: false, signal });
 }
 
-export async function extractNutrition(files, { signal } = {}) {
+export async function extractNutrition(files, { signal, weekly } = {}) {
   const sample = await getSample();
   if (!sample) throw { code: 'not_granted' };
   const keys = NUTRITION_FIELDS.map((f) => `${f.key} = ${f.label} (${f.unit})`).join('\n');
-  const prompt = `Estas imágenes son capturas de la app de nutrición Fitia (resumen diario o semanal).
+  const wkeys = WEEKLY_FIELDS.slice(0, 3).map((f) => `${f.key} = ${f.label}`).join('\n');
+  const prompt = `Estas imágenes son capturas de la app de nutrición Fitia: un resumen diario o el resumen semanal ("Score nutricional").
 Extrae los totales consumidos y, si aparecen, las metas. Claves:
 ${keys}
-Si la captura es semanal, devuelve el promedio diario y marca "periodo": "semana".
-Responde SOLO con JSON: {"fecha": "AAAA-MM-DD o null", "periodo": "dia|semana", "valores": {"kcal": 2100, "proteina": 150}, "resumen": "1 frase"}`;
+Si es el resumen semanal: marca "periodo": "semana", pon en "fecha" el primer día y en "fechaFin" el último día de la semana, usa el promedio diario de la semana en las claves anteriores y agrega estas claves si aparecen:
+${wkeys}
+En "fortalezas" y "mejoras" copia en frases cortas lo que la app destaca como bien y por mejorar.${weekly ? '\nEl usuario indicó que es el resumen semanal.' : ''}
+Usa el año ${new Date().getFullYear()} si la captura no lo muestra. No inventes valores que no se vean.
+Responde SOLO con JSON: {"fecha": "AAAA-MM-DD o null", "fechaFin": "AAAA-MM-DD o null", "periodo": "dia|semana", "valores": {"kcal": 2100, "proteina": 150}, "fortalezas": ["..."], "mejoras": ["..."], "resumen": "1 frase"}`;
+  return sample.json(prompt, { images: files, modelTier: 'default', cache: false, signal });
+}
+
+export async function extractActivity(files, { signal } = {}) {
+  const sample = await getSample();
+  if (!sample) throw { code: 'not_granted' };
+  const keys = ACTIVITY_FIELDS.map((f) => `${f.key} = ${f.label} (${f.unit || 'número'})`).join('\n');
+  const prompt = `Estas imágenes son capturas de una actividad registrada en Samsung Health (Galaxy Watch) u otra app de reloj: natación, caminata, carrera, bicicleta, etc.
+Extrae los datos. Claves de "valores":
+${keys}
+Convierte la duración a minutos con decimales (46:56 = 46.93). "activoMin" es el tiempo en movimiento si aparece, o calcúlalo con el ritmo medio y la distancia. Distancia en metros.
+Si hay una tabla de largos o vueltas (splits), copia cada fila en "largos" con el tiempo y el descanso tal como aparecen.
+Usa el año ${new Date().getFullYear()} si la captura no lo muestra. No inventes valores que no se vean.
+Responde SOLO con JSON: {"fecha": "AAAA-MM-DD o null", "hora": "HH:MM o null", "tipo": "${Object.keys(ACTIVITY_TYPES).join('|')}", "lugar": "Piscina, Parque… o null", "valores": {"distancia": 550, "duracionMin": 46.93}, "ritmo": "texto del ritmo medio o null", "largos": [{"n": 1, "distancia": 25, "tiempo": "00:52.3", "ritmo": "03'29\\"", "descanso": "00:23.1 o null", "estilo": "Libre"}], "zonasFC": "resumen de las zonas de FC o null", "dispositivo": "Galaxy Watch6 o null", "resumen": "1 frase"}`;
   return sample.json(prompt, { images: files, modelTier: 'default', cache: false, signal });
 }
 
 /* ---------- resumen para el proyecto Mi Salud ---------- */
-export function miSaludSummary({ profile, sessions, measurements, nutrition, days = 14 }) {
+export function miSaludSummary({ profile, sessions, measurements, nutrition, activities = [], days = 14 }) {
   const since = dateKey(addDays(new Date(), -days));
   const done = completedSessions(sessions).filter((s) => s.date >= since);
   const sets = setsByMuscle(done, since, todayKey());
@@ -195,6 +265,9 @@ export function miSaludSummary({ profile, sessions, measurements, nutrition, day
   lines.push('');
   lines.push('Sesiones:');
   for (const s of done) lines.push(sessionLine(s));
+  lines.push('');
+  lines.push('Cardio y otras actividades:');
+  lines.push(activitiesBlock(activities, days));
   lines.push('');
   lines.push('Medidas:');
   lines.push(measurementsBlock(measurements));
@@ -233,4 +306,72 @@ export async function celebrationMessage(session, facts, { signal } = {}) {
 Datos: ${JSON.stringify(facts)}`;
   const { text } = await sample(prompt, { modelTier: 'quick', cache: false, signal });
   return text;
+}
+
+/* ---------- chat con el asistente de fitness y nutrición ---------- */
+// Todo lo que hay en la app, en texto. Se arma de nuevo en cada mensaje, así el asistente siempre ve lo último.
+export function coachContext(st) {
+  const today = todayKey();
+  const done = completedSessions(st.sessions || []).filter((s) => s.status === 'guardada');
+  const open = (st.sessions || []).filter((s) => s.status === 'plan' || s.status === 'en_curso');
+  const R = rangesFor(st.profile);
+  const w1 = setsByMuscle(done, dateKey(addDays(new Date(), -6)), today);
+  const w4 = setsByMuscle(done, dateKey(addDays(new Date(), -27)), today);
+  const lt = lastTrained(done);
+  const volume = MUSCLES.map((m) => `${m.name}: ${fmtNum(w1[m.id])} series en 7 días, ${fmtNum((w4[m.id] || 0) / 4)} por semana en 4 semanas, meta ${R[m.id].max ? `${R[m.id].min}-${R[m.id].max}` : 'sin trabajo dedicado'}, último ${lt[m.id] || 'nunca'}`).join('\n');
+  const prs = recentPRs(done, 8).map((p) => `${p.date} ${p.name}: ${fmtSet(p.set || {})} kg, 1RM estimado ${fmtNum(p.e1rm)} kg (+${fmtNum(p.gain * 100, 0)} %)`).join('\n');
+  const catalog = (st.exercises || []).filter((e) => !e.archived).map((e) => `${e.name}${e.nombreEs ? ` (${e.nombreEs})` : ''} [${modalidadOf(e) === 'freeletics' ? 'Freeletics' : 'Forus'}] ${(e.primary || []).join(',')}${e.knee && e.knee !== 'ok' ? ` rodilla:${e.knee}` : ''}${e.back && e.back !== 'ok' ? ` espalda:${e.back}` : ''}`).join('\n');
+  return `HOY ES ${today} (${['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'][new Date().getDay()]}).
+
+PERFIL
+${profileBlock(st.profile || {})}
+
+VOLUMEN POR MÚSCULO (series efectivas; los músculos secundarios cuentan 0.5)
+${volume}
+
+SESIONES DE FUERZA GUARDADAS (más reciente primero; ${done.length} en total)
+${done.slice(0, 30).map(sessionLine).join('\n\n') || 'Aún no hay sesiones guardadas.'}
+${open.length ? `\nSESIÓN EN CURSO O PLANIFICADA\n${open.map(sessionLine).join('\n\n')}` : ''}
+
+RÉCORDS RECIENTES
+${prs || 'Sin récords todavía.'}
+
+CARDIO Y OTRAS ACTIVIDADES (últimos 60 días)
+${activitiesBlock(st.activities || [], 60)}
+
+MEDIDAS CORPORALES (por fecha; entre corchetes la fuente)
+${measurementsBlock(st.measurements || [], 12)}
+
+NUTRICIÓN DIARIA (Fitia, últimos 45 días; las fechas que faltan no se registraron)
+${nutritionDays(st.nutrition || [])}
+
+${weeklyBlock(st.nutrition || []) || 'Sin resúmenes semanales de Fitia.'}
+
+CATÁLOGO DE EJERCICIOS
+${catalog}`;
+}
+
+const COACH_RULES = `Eres el asistente de Fitness Log: un entrenador personal y nutricionista deportivo con experiencia, que acompaña a esta persona. Tienes delante todos los datos de su app (abajo). Úsalos: cita fechas, cifras y ejercicios concretos cuando respondas.
+Cómo respondes:
+- En español, cercano y directo. Primero la respuesta, después el porqué. Normalmente 80-200 palabras; más solo si lo pide.
+- Su objetivo es la recomposición corporal (ganar músculo sin subir de peso). Es principiante y entrena unas 2 veces por semana 1 hora en Forus, más Freeletics en casa y algo de cardio como natación.
+- Cuida su rodilla derecha y su espalda en cada recomendación.
+- Los días sin registro en Fitia significan que no se anotó, no que no comió.
+- Distingue lo que muestran los datos de lo que supones. Si falta un dato, dilo y sugiere cómo registrarlo en la app.
+- No diagnostiques. Ante dolor fuerte, que no cede o con síntomas nuevos, recomienda consultar a su médico o fisioterapeuta.
+- Formato: párrafos cortos y listas con "- ". Usa **negrita** solo para lo clave. Sin tablas ni encabezados grandes.
+
+DATOS DE LA APP
+`;
+
+// turns: [{role, content}] terminando en el mensaje nuevo del usuario.
+export async function askCoach(st, turns, { signal, onText, images } = {}) {
+  const sample = await getSample();
+  if (!sample) throw { code: 'not_granted' };
+  const recent = turns.slice(-20);
+  while (recent.length && recent[0].role !== 'user') recent.shift();
+  const input = recent.map((t, i) => (i === 0 ? { role: 'user', content: `${COACH_RULES}${coachContext(st)}\n\n---\nMENSAJE DEL USUARIO:\n${t.content}` } : { role: t.role, content: t.content }));
+  const opts = { modelTier: 'default', cache: false, signal, onText };
+  if (images?.length) opts.images = images;
+  return sample(input, opts);
 }

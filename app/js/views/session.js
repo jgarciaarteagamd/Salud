@@ -1,8 +1,9 @@
-// Editor de una sesión: tabla por ejercicio (cada fila una serie: reps, peso, RIR),
-// sustituir / omitir / agregar ejercicios, temporizador de descanso y cierre de sesión.
+// Editor de una sesión: calentamiento, bloque principal y vuelta a la calma, con una tabla por
+// ejercicio (cada fila una serie: reps, peso, RIR), sustituir / omitir / agregar ejercicios,
+// temporizador de descanso y cierre de sesión.
 import { saveDoc, deleteDoc, newId, getState } from '../store.js';
 import { MUSCLES, muscleShort } from '../muscles.js';
-import { lastPerformance, num, fmtNum, fmtDay, isWorkSet, sessionVolume, sessionSetCount, todayKey, fmtSet } from '../stats.js';
+import { lastPerformance, num, fmtNum, fmtDay, isWorkSet, sessionVolume, sessionSetCount, todayKey, fmtSet, isPhaseItem } from '../stats.js';
 import { ExerciseInfo } from './exinfo.js';
 import { Icon, Sheet, ExThumb, Confirm, toast, copyText } from '../ui.js';
 const { html, useState, useEffect, useRef, useMemo } = window.htmPreact;
@@ -13,16 +14,21 @@ export const SWAP_REASONS = ['Máquina ocupada', 'Molestia en rodilla', 'Molesti
 const clone = (o) => JSON.parse(JSON.stringify(o));
 const emptySet = (weight = '') => ({ reps: '', secs: '', weight, rir: '', done: false });
 const isTimed = (it) => it.medida === 'tiempo';
-const isBodyweight = (it) => it.modalidad === 'freeletics';
+// Sin columna de peso: peso corporal, movilidad, cardio y lo que se mide en segundos al calentar o enfriar.
+const isBodyweight = (it) => it.modalidad === 'freeletics' || ['movilidad', 'cardio'].includes(it.categoria) || (isPhaseItem(it) && isTimed(it));
 
-export function makeItem(ex, { origin = 'plan', planned = null, sessions = [], date = todayKey() } = {}) {
-  const lp = lastPerformance(sessions, ex.id, date);
-  const nSets = planned?.series || lp?.sets.length || 3;
+// fase: 'calentamiento' | 'enfriamiento' | null (bloque principal).
+export function makeItem(ex, { origin = 'plan', planned = null, sessions = [], date = todayKey(), fase = null } = {}) {
+  const lp = lastPerformance(sessions, ex.id, date, undefined, !!fase);
+  const nSets = planned?.series || lp?.sets.length || (fase ? 1 : 3);
   const w = planned?.peso ?? lp?.sets?.[0]?.weight ?? '';
+  // Si la meta viene en segundos (p. ej. 5 min de elíptica), la tabla registra segundos.
+  const medida = planned?.segundos && !planned?.reps ? 'tiempo' : ex.medida || 'reps';
   return {
     uid: newId('it'), exerciseId: ex.id, name: ex.name,
     primary: ex.primary || [], secondary: ex.secondary || [],
-    medida: ex.medida || 'reps', unilateral: !!ex.unilateral, modalidad: ex.modalidad || 'forus', categoria: ex.categoria || 'fuerza',
+    medida, unilateral: !!ex.unilateral, modalidad: ex.modalidad || 'forus', categoria: ex.categoria || 'fuerza',
+    ...(fase ? { fase } : {}),
     origin, status: 'pendiente', planned,
     sets: Array.from({ length: nSets }, () => emptySet(w === null ? '' : w)),
   };
@@ -151,7 +157,7 @@ function PostSheet({ initial, onSave, onClose }) {
 /* ---------- tarjeta de ejercicio ---------- */
 function ExerciseCard({ item, ex, sessions, date, sessionId, onChange, onRemove, onAskSwap, onAskSkip, onAskNote, onSetDone, onInfo }) {
   const [open, setOpen] = useState(false);
-  const lp = useMemo(() => lastPerformance(sessions, item.exerciseId, date, sessionId), [sessions, item.exerciseId, date, sessionId]);
+  const lp = useMemo(() => lastPerformance(sessions, item.exerciseId, date, sessionId, isPhaseItem(item)), [sessions, item.exerciseId, date, sessionId, item.fase]);
   const omitted = item.status === 'omitido';
   const p = item.planned;
   const timed = isTimed(item); const bw = isBodyweight(item);
@@ -171,7 +177,8 @@ function ExerciseCard({ item, ex, sessions, date, sessionId, onChange, onRemove,
     if (done && (s.rir === '' || s.rir == null) && rirHint !== '') next.rir = String(rirHint);
     const sets = item.sets.map((x, j) => (j === i ? next : x));
     onChange({ ...item, sets });
-    if (done) onSetDone(p?.descansoSeg || 90);
+    const rest = isPhaseItem(item) ? p?.descansoSeg : p?.descansoSeg || 90;
+    if (done && rest) onSetDone(rest);
   };
   const addSet = () => { const last = item.sets[item.sets.length - 1]; onChange({ ...item, sets: [...item.sets, emptySet(last?.weight ?? '')] }); };
   const removeSet = () => { if (item.sets.length > 1) onChange({ ...item, sets: item.sets.slice(0, -1) }); };
@@ -247,8 +254,10 @@ function RestTimer({ until, onDone }) {
 /* ---------- llevar la sesión a "Crear workout" de Freeletics ---------- */
 export function freeleticsRounds(session) {
   const items = (session.items || []).filter((i) => i.status !== 'omitido');
-  const mob = items.filter((i) => i.categoria === 'movilidad');
-  const work = items.filter((i) => i.categoria !== 'movilidad');
+  // Sesiones antiguas sin fases: la movilidad del bloque se lleva al calentamiento.
+  const mob = items.filter((i) => i.fase === 'calentamiento' || (!i.fase && i.categoria === 'movilidad'));
+  const cool = items.filter((i) => i.fase === 'enfriamiento');
+  const work = items.filter((i) => !mob.includes(i) && !cool.includes(i));
   const amount = (it) => {
     const p = it.planned || {};
     const v = it.medida === 'tiempo' ? `${p.segundos || it.sets?.[0]?.secs || 30} s` : `${p.reps || it.sets?.[0]?.reps || 10} reps`;
@@ -257,16 +266,18 @@ export function freeleticsRounds(session) {
   const n = Math.max(1, ...work.map((i) => i.planned?.series || i.sets?.length || 1));
   const rounds = Array.from({ length: n }, (_, r) => work.filter((i) => (i.planned?.series || i.sets?.length || 1) > r)
     .map((i) => ({ name: i.name, amount: amount(i), pausa: i.planned?.descansoSeg || 30 })));
-  return { mob: mob.map((i) => ({ name: i.name, amount: amount(i) })), rounds };
+  const simple = (list) => list.map((i) => ({ name: i.name, amount: amount(i) }));
+  return { mob: simple(mob), rounds, cool: simple(cool) };
 }
 
 function FreeleticsExport({ session }) {
   const [open, setOpen] = useState(false);
-  const { mob, rounds } = freeleticsRounds(session);
+  const { mob, rounds, cool } = freeleticsRounds(session);
   const text = [
     `Workout: ${session.title || 'Sesión en casa'}`,
     ...(mob.length ? ['', 'Calentamiento / movilidad:', ...mob.map((m) => `- ${m.name} · ${m.amount}`)] : []),
     ...rounds.flatMap((r, i) => ['', `Ronda ${i + 1}/${rounds.length}`, ...r.flatMap((x) => [`+ Exercise: ${x.name} · ${x.amount}`, `+ Pausa: ${x.pausa} s`])]),
+    ...(cool.length ? ['', 'Vuelta a la calma:', ...cool.map((m) => `- ${m.name} · ${m.amount}`)] : []),
   ].join('\n');
   return html`
     <section class="panel stack-sm">
@@ -326,7 +337,7 @@ export function SessionEditor({ session, mode = 'live', onClosed }) {
     onPick: (ex, reason) => {
       const it = draft.items.find((x) => x.uid === uid);
       const base = it.status === 'sustituido' ? it.replacedFrom : { exerciseId: it.exerciseId, name: it.name };
-      const fresh = makeItem(ex, { origin: it.origin, planned: it.planned ? { ...it.planned, peso: null } : null, sessions: others, date: draft.date });
+      const fresh = makeItem(ex, { origin: it.origin, planned: it.planned ? { ...it.planned, peso: null } : null, sessions: others, date: draft.date, fase: it.fase || null });
       commit({ ...draft, items: draft.items.map((x) => (x.uid === uid ? { ...fresh, uid, origin: it.origin, status: 'sustituido', replacedFrom: base, reason: reason || null } : x)) });
       setSheet(null);
     },
@@ -339,10 +350,16 @@ export function SessionEditor({ session, mode = 'live', onClosed }) {
     },
   });
   const doNote = (uid) => setSheet({ kind: 'note', uid });
-  const doAdd = () => setSheet({
+  const doAdd = (fase = null) => setSheet({
     kind: 'add',
+    title: fase === 'calentamiento' ? 'Agregar al calentamiento' : fase === 'enfriamiento' ? 'Agregar a la vuelta a la calma' : undefined,
     onPick: (ex) => {
-      commit({ ...draft, items: [...draft.items, makeItem(ex, { origin: 'agregado', sessions: others, date: draft.date })] });
+      // Se inserta al final de su fase para que el orden calentamiento → bloque → calma se mantenga.
+      const it = makeItem(ex, { origin: 'agregado', sessions: others, date: draft.date, fase });
+      const order = (x) => (x.fase === 'calentamiento' ? 0 : x.fase === 'enfriamiento' ? 2 : 1);
+      const at = draft.items.findIndex((x) => order(x) > order(it));
+      const items = at < 0 ? [...draft.items, it] : [...draft.items.slice(0, at), it, ...draft.items.slice(at)];
+      commit({ ...draft, items });
       setSheet(null);
       toast(`${ex.name} agregado`);
     },
@@ -379,6 +396,18 @@ export function SessionEditor({ session, mode = 'live', onClosed }) {
   const active = draft.items.filter((i) => i.status !== 'omitido');
   const omitted = draft.items.filter((i) => i.status === 'omitido');
   const noteItem = sheet?.kind === 'note' ? draft.items.find((x) => x.uid === sheet.uid) : null;
+  // Calentamiento y vuelta a la calma se muestran como el bloque: cada ejercicio con su dibujo y su ficha.
+  // En sesiones antiguas pueden venir como texto (plan.calentamiento / plan.vuelta_calma).
+  const phases = [
+    { key: 'cal', fase: 'calentamiento', label: 'Calentamiento', items: active.filter((i) => i.fase === 'calentamiento'), notes: plan?.calentamiento },
+    { key: 'blq', fase: null, label: 'Bloque principal', items: active.filter((i) => !isPhaseItem(i)) },
+    { key: 'enf', fase: 'enfriamiento', label: 'Vuelta a la calma', items: active.filter((i) => i.fase === 'enfriamiento'), notes: plan?.vuelta_calma },
+  ].filter((ph) => !ph.fase || mode === 'live' || ph.items.length || ph.notes?.length || draft.items.some((i) => i.fase === ph.fase));
+  const hasPhases = phases.length > 1;
+  const card = (it) => html`<${ExerciseCard} key=${it.uid} item=${it} ex=${exById[it.exerciseId]} sessions=${others} date=${draft.date} sessionId=${draft.id}
+    onChange=${(x) => updateItem(it.uid, x)} onRemove=${() => removeItem(it.uid)}
+    onAskSwap=${() => doSwap(it.uid)} onAskSkip=${() => doSkip(it.uid)} onAskNote=${() => doNote(it.uid)}
+    onSetDone=${(sec) => setRestUntil(Date.now() + sec * 1000)} onInfo=${() => setInfo(it.exerciseId)} />`;
 
   return html`
     <div class="stack">
@@ -397,15 +426,17 @@ export function SessionEditor({ session, mode = 'live', onClosed }) {
           <span class="eyebrow">Por qué esta sesión</span>
           <p>${plan.razonamiento}</p>
           ${plan.precauciones?.length ? html`<div class="stack-sm"><span class="eyebrow">Precauciones</span><ul class="small" style="margin:0;padding-left:18px">${plan.precauciones.map((x) => html`<li>${x}</li>`)}</ul></div>` : null}
-          ${plan.calentamiento?.length ? html`<div class="stack-sm"><span class="eyebrow">Calentamiento</span><ul class="small" style="margin:0;padding-left:18px">${plan.calentamiento.map((x) => html`<li>${x}</li>`)}</ul></div>` : null}
         </section>`}
 
-      ${active.map((it) => html`<${ExerciseCard} key=${it.uid} item=${it} ex=${exById[it.exerciseId]} sessions=${others} date=${draft.date} sessionId=${draft.id}
-          onChange=${(x) => updateItem(it.uid, x)} onRemove=${() => removeItem(it.uid)}
-          onAskSwap=${() => doSwap(it.uid)} onAskSkip=${() => doSkip(it.uid)} onAskNote=${() => doNote(it.uid)}
-          onSetDone=${(sec) => setRestUntil(Date.now() + sec * 1000)} onInfo=${() => setInfo(it.exerciseId)} />`)}
-
-      <button class="btn btn-block" onClick=${doAdd}><${Icon} name="plus" /> Agregar ejercicio</button>
+      ${phases.map((ph) => html`
+        <section class="stack phase" key=${ph.key}>
+          ${hasPhases && html`<div class="phase-head"><span class="eyebrow">${ph.label}</span>${ph.items.length ? html`<span class="xs muted num">${ph.items.length} ${ph.items.length === 1 ? 'ejercicio' : 'ejercicios'}</span>` : null}</div>`}
+          ${ph.notes?.length ? html`<ul class="small phase-notes">${ph.notes.map((x) => html`<li>${x}</li>`)}</ul>` : null}
+          ${ph.items.map(card)}
+          ${ph.fase
+            ? html`<button class="btn btn-sm btn-ghost" style="align-self:flex-start" onClick=${() => doAdd(ph.fase)}><${Icon} name="plus" size="16" /> Agregar a ${ph.fase === 'calentamiento' ? 'calentamiento' : 'vuelta a la calma'}</button>`
+            : html`<button class="btn btn-block" onClick=${() => doAdd()}><${Icon} name="plus" /> Agregar ejercicio</button>`}
+        </section>`)}
 
       ${omitted.length ? html`
         <section class="stack-sm">
@@ -413,8 +444,6 @@ export function SessionEditor({ session, mode = 'live', onClosed }) {
           ${omitted.map((it) => html`<${ExerciseCard} key=${it.uid} item=${it} ex=${exById[it.exerciseId]} sessions=${others} date=${draft.date} sessionId=${draft.id}
             onChange=${(x) => updateItem(it.uid, x)} onRemove=${() => removeItem(it.uid)} onAskSwap=${() => {}} onAskSkip=${() => {}} onAskNote=${() => doNote(it.uid)} onSetDone=${() => {}} onInfo=${() => setInfo(it.exerciseId)} />`)}
         </section>` : null}
-
-      ${plan?.vuelta_calma?.length ? html`<section class="panel stack-sm"><span class="eyebrow">Vuelta a la calma</span><ul class="small" style="margin:0;padding-left:18px">${plan.vuelta_calma.map((x) => html`<li>${x}</li>`)}</ul></section>` : null}
 
       ${mode === 'edit' && html`
         <section class="stack-sm">
@@ -431,7 +460,7 @@ export function SessionEditor({ session, mode = 'live', onClosed }) {
       </div>
 
       ${info && html`<${ExerciseInfo} exerciseId=${info} onClose=${() => setInfo(null)} />`}
-      ${sheet?.kind === 'add' && html`<${ExercisePicker} lugar=${draft.lugar || 'forus'} onPick=${sheet.onPick} onClose=${() => setSheet(null)} />`}
+      ${sheet?.kind === 'add' && html`<${ExercisePicker} lugar=${draft.lugar || 'forus'} title=${sheet.title} onPick=${sheet.onPick} onClose=${() => setSheet(null)} />`}
       ${sheet?.kind === 'swap' && html`<${ExercisePicker} lugar=${draft.lugar || 'forus'} title="Sustituir por…" reasons=${SWAP_REASONS} onPick=${sheet.onPick} onClose=${() => setSheet(null)} />`}
       ${sheet?.kind === 'skip' && html`<${ReasonSheet} title="¿Por qué lo omites?" reasons=${SKIP_REASONS} onPick=${sheet.onPick} onClose=${() => setSheet(null)} />`}
       ${noteItem && html`<${NoteSheet} value=${noteItem.note} onSave=${(v) => { updateItem(noteItem.uid, { ...noteItem, note: v }); setSheet(null); }} onClose=${() => setSheet(null)} />`}

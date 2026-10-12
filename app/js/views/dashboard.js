@@ -43,6 +43,15 @@ export function DashboardView({ go }) {
   }, [done]);
   const prog = useMemo(() => Object.fromEntries(MUSCLES.map((m) => [m.id, muscleProgress(done, m.id)])), [done]);
   const lt = useMemo(() => lastTrained(done), [done]);
+  const cardio7 = useMemo(() => {
+    const since = dateKey(addDays(new Date(), -6));
+    const list = (st.activities || []).filter((a) => a.date >= since && a.date <= today);
+    return {
+      n: list.length,
+      min: list.reduce((t, a) => t + (Number(a.valores?.duracionMin) || 0), 0),
+      m: list.filter((a) => a.tipo === 'natacion').reduce((t, a) => t + (Number(a.valores?.distancia) || 0), 0),
+    };
+  }, [st.activities]);
 
   const fills = useMemo(() => {
     const f = {};
@@ -108,10 +117,11 @@ export function DashboardView({ go }) {
         <${Icon} name=${open ? 'chevron' : 'spark'} size="26" />
       </button>
 
-      <div class="kpis">
+      <div class="kpis five">
         <${Kpi} label="Sesiones del mes" value=${sessMonth} hint=${done.length ? `${done.length} en total` : 'Registra la primera'} />
         <${Kpi} label="Series · 7 días" value=${fmtNum(sets7, 0)} hint="Principal = 1, secundario = ½" />
         <${Kpi} label="Racha" value=${streak} unit=${streak === 1 ? 'semana' : 'semanas'} hint="Semanas seguidas entrenando" />
+        <${Kpi} label="Cardio · 7 días" value=${cardio7.min ? fmtNum(cardio7.min, 0) : '0'} unit="min" hint=${cardio7.n ? `${cardio7.n} ${cardio7.n === 1 ? 'actividad' : 'actividades'}${cardio7.m ? ` · ${fmtNum(cardio7.m, 0)} m nadados` : ''}` : 'Natación, caminata…'} />
         <${Kpi} label="Peso" value=${lastW ? fmtNum(Number(lastW.valores.peso)) : '—'} unit="kg" delta=${lastW && prevW ? Number(lastW.valores.peso) - Number(prevW.valores.peso) : null} deltaGood="down" hint=${lastW ? fmtShort(lastW.date) : 'Sin medidas'} />
       </div>
 

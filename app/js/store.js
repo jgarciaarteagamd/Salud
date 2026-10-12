@@ -2,12 +2,12 @@
 // y, si no está disponible (vista previa local), un respaldo en localStorage con la misma forma.
 const { useState, useEffect } = window.htmPreact;
 
-export const COLLECTIONS = ['exercises', 'sessions', 'measurements', 'nutrition'];
+export const COLLECTIONS = ['exercises', 'sessions', 'measurements', 'nutrition', 'activities', 'chats'];
 const PROFILE_PATH = 'profile/main';
 
 const state = {
   mode: 'loading', // 'cloud' | 'local'
-  exercises: [], sessions: [], measurements: [], nutrition: [],
+  exercises: [], sessions: [], measurements: [], nutrition: [], activities: [], chats: [],
   profile: null,
   loaded: {},
   canWrite: true,

@@ -1,10 +1,11 @@
-// Arranque y navegación por pestañas (#inicio, #hoy, #historial, #cuerpo, #mas).
+// Arranque y navegación por pestañas (#inicio, #hoy, #historial, #cuerpo, #coach, #mas).
 import { initStore, useStore } from './store.js';
 import { DashboardView } from './views/dashboard.js';
 import { TodayView } from './views/today.js';
 import { HistoryView } from './views/history.js';
 import { BodyView } from './views/body.js';
 import { MoreView } from './views/more.js';
+import { CoachView } from './views/coach.js';
 import { Icon, ToastHost } from './ui.js';
 const { html, render, useState, useEffect } = window.htmPreact;
 
@@ -13,6 +14,7 @@ const TABS = [
   ['hoy', 'Hoy', 'today'],
   ['historial', 'Historial', 'history'],
   ['cuerpo', 'Cuerpo', 'body'],
+  ['coach', 'Coach', 'chat'],
   ['mas', 'Más', 'more'],
 ];
 const readHash = () => { const h = (location.hash || '').slice(1); return TABS.some(([k]) => k === h) ? h : 'inicio'; };
@@ -34,6 +36,7 @@ function App() {
   else if (tab === 'hoy') view = html`<${TodayView} go=${go} />`;
   else if (tab === 'historial') view = html`<${HistoryView} go=${go} param=${param} />`;
   else if (tab === 'cuerpo') view = html`<${BodyView} go=${go} />`;
+  else if (tab === 'coach') view = html`<${CoachView} go=${go} />`;
   else if (tab === 'mas') view = html`<${MoreView} go=${go} />`;
   else view = html`<${DashboardView} go=${go} />`;
 

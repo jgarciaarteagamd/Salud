@@ -1,15 +1,22 @@
 // Cuerpo: medidas (antropometría, bioimpedancia, Samsung Watch) y nutrición (Fitia).
 // Cada registro se crea desde capturas que Claude lee, o a mano; siempre se revisa antes de guardar.
 import { useStore, saveDoc, deleteDoc, newId, uploadImage, canUpload, assetUrl } from '../store.js';
-import { MEASURE_GROUPS, MEASURE_FIELDS, MEASURE_TYPES, NUTRITION_FIELDS, mergeMeasurementsByDate, SOURCE_SHORT } from '../fields.js';
+import {
+  MEASURE_GROUPS, MEASURE_FIELDS, MEASURE_TYPES, NUTRITION_FIELDS, NUTRITION_GROUPS, WEEKLY_GROUPS, WEEKLY_FIELDS, isWeekly,
+  mergeMeasurementsByDate, SOURCE_SHORT,
+} from '../fields.js';
 import { extractMeasurements, extractNutrition, imageLimits, errorCopy } from '../ai.js';
-import { todayKey, fmtShort, fmtDay, fmtNum, num, addDays, dateKey } from '../stats.js';
+import { todayKey, fmtShort, fmtDay, fmtNum, num, addDays, dateKey, daysBetween } from '../stats.js';
 import { Icon, Sheet, LineChart, Thinking, Confirm, toast } from '../ui.js';
 const { html, useState, useEffect, useMemo, useRef } = window.htmPreact;
 
-function EntrySheet({ kind, entry, onClose }) {
+function EntrySheet({ kind, entry, weekly, onClose }) {
   const isNut = kind === 'nutrition';
-  const [date, setDate] = useState(entry?.date || todayKey());
+  const [periodo, setPeriodo] = useState(entry?.periodo || (weekly ? 'semana' : 'dia'));
+  const isWeek = isNut && periodo === 'semana';
+  const [date, setDate] = useState(entry?.date || (weekly ? dateKey(addDays(new Date(), -6)) : todayKey()));
+  const [dateEnd, setDateEnd] = useState(entry?.dateEnd || (weekly ? todayKey() : ''));
+  const [notes2, setNotes2] = useState({ fortalezas: entry?.fortalezas || [], mejoras: entry?.mejoras || [] });
   const [tipo, setTipo] = useState(entry?.tipo || 'bioimpedancia');
   const [vals, setVals] = useState(() => Object.fromEntries(Object.entries(entry?.valores || {}).map(([k, v]) => [k, String(v)])));
   const [notas, setNotas] = useState(entry?.notas || '');
@@ -21,7 +28,7 @@ function EntrySheet({ kind, entry, onClose }) {
   const [showAll, setShowAll] = useState(!entry && false);
   const [confirmDel, setConfirmDel] = useState(false);
   const ctl = useRef(null);
-  const fields = isNut ? NUTRITION_FIELDS : MEASURE_FIELDS;
+  const fields = isWeek ? WEEKLY_FIELDS : isNut ? NUTRITION_FIELDS : MEASURE_FIELDS;
 
   useEffect(() => { imageLimits().then(setImgCaps); }, []);
   useEffect(() => { const urls = files.map((f) => URL.createObjectURL(f)); setPreviews(urls); return () => urls.forEach((u) => URL.revokeObjectURL(u)); }, [files]);
@@ -32,10 +39,15 @@ function EntrySheet({ kind, entry, onClose }) {
     if (!files.length) return;
     setBusy('read'); setErr(''); ctl.current = new AbortController();
     try {
-      const r = isNut ? await extractNutrition(files, { signal: ctl.current.signal })
+      const r = isNut ? await extractNutrition(files, { signal: ctl.current.signal, weekly: isWeek })
         : await extractMeasurements(files, MEASURE_TYPES[tipo], { signal: ctl.current.signal });
+      const week = isNut && r?.periodo === 'semana';
+      if (isNut) setPeriodo(week ? 'semana' : 'dia');
+      if (week && r?.fechaFin && /^\d{4}-\d{2}-\d{2}$/.test(r.fechaFin)) setDateEnd(r.fechaFin);
+      if (isNut) setNotes2({ fortalezas: (r?.fortalezas || []).filter(Boolean), mejoras: (r?.mejoras || []).filter(Boolean) });
+      const allowed = week ? WEEKLY_FIELDS : isNut ? NUTRITION_FIELDS : MEASURE_FIELDS;
       const next = { ...vals };
-      for (const [k, v] of Object.entries(r?.valores || {})) if (fields.some((f) => f.key === k) && num(v) != null) next[k] = String(num(v));
+      for (const [k, v] of Object.entries(r?.valores || {})) if (allowed.some((f) => f.key === k) && num(v) != null) next[k] = String(num(v));
       setVals(next);
       if (r?.fecha && /^\d{4}-\d{2}-\d{2}$/.test(r.fecha)) setDate(r.fecha);
       if (!isNut && r?.tipo && MEASURE_TYPES[r.tipo]) setTipo(r.tipo);
@@ -55,26 +67,33 @@ function EntrySheet({ kind, entry, onClose }) {
       if (files.length && canUpload()) for (const f of files) imagenes.push(await uploadImage(f));
       const doc = { ...(entry || {}), date, valores, notas, imagenes, createdAt: entry?.createdAt || new Date().toISOString() };
       if (!isNut) { doc.tipo = tipo; doc.otros = otros; }
+      if (isNut) {
+        doc.periodo = periodo; doc.fuente = entry?.fuente || 'fitia';
+        if (isWeek) { doc.dateEnd = dateEnd || null; doc.fortalezas = notes2.fortalezas; doc.mejoras = notes2.mejoras; }
+      }
       await saveDoc(isNut ? 'nutrition' : 'measurements', entry?.id || newId(isNut ? 'n' : 'm'), doc);
       toast('Registro guardado');
       onClose();
     } catch (e) { setErr(e?.code === 'quota_or_state' ? 'No queda espacio para imágenes. Guarda sin captura.' : 'No se pudo guardar. Intenta de nuevo.'); } finally { setBusy(''); }
   }
 
-  const groups = isNut ? [{ title: 'Del día', fields: NUTRITION_FIELDS }] : MEASURE_GROUPS;
+  const groups = isWeek ? WEEKLY_GROUPS : isNut ? NUTRITION_GROUPS : MEASURE_GROUPS;
   const filledKeys = new Set(Object.entries(vals).filter(([, v]) => v !== '').map(([k]) => k));
-  const visibleGroups = groups.map((g) => ({ ...g, fields: g.fields.filter((f) => showAll || isNut || filledKeys.has(f.key) || ['peso', 'grasaPct', 'masaMuscular', 'cintura'].includes(f.key)) })).filter((g) => g.fields.length);
+  const always = isNut ? new Set([...NUTRITION_GROUPS[0].fields, ...NUTRITION_GROUPS[1].fields, ...WEEKLY_FIELDS].map((f) => f.key)) : new Set(['peso', 'grasaPct', 'masaMuscular', 'cintura']);
+  const visibleGroups = groups.map((g) => ({ ...g, fields: g.fields.filter((f) => showAll || filledKeys.has(f.key) || always.has(f.key)) })).filter((g) => g.fields.length);
 
   return html`
-    <${Sheet} title=${entry ? 'Editar registro' : isNut ? 'Nutrición' : 'Nueva medida'} onClose=${() => { ctl.current?.abort(); onClose(); }}>
+    <${Sheet} title=${entry ? 'Editar registro' : isWeek ? 'Score nutricional semanal' : isNut ? 'Nutrición del día' : 'Nueva medida'} onClose=${() => { ctl.current?.abort(); onClose(); }}>
+      ${isNut && !entry && html`<div class="seg" role="group" aria-label="Tipo de captura"><button aria-pressed=${!isWeek} onClick=${() => setPeriodo('dia')}>Resumen del día</button><button aria-pressed=${isWeek} onClick=${() => { setPeriodo('semana'); if (!dateEnd) { setDateEnd(date); setDate(dateKey(addDays(new Date(date + 'T12:00'), -6))); } }}>Score semanal</button></div>`}
       <div class="form-grid">
-        <label class="field"><span>Fecha</span><input id="en-date" type="date" class="input" value=${date} onInput=${(e) => setDate(e.target.value)} /></label>
+        <label class="field"><span>${isWeek ? 'Desde' : 'Fecha'}</span><input id="en-date" type="date" class="input" value=${date} onInput=${(e) => setDate(e.target.value)} /></label>
+        ${isWeek && html`<label class="field"><span>Hasta</span><input id="en-date-end" type="date" class="input" value=${dateEnd} onInput=${(e) => setDateEnd(e.target.value)} /></label>`}
         ${!isNut && html`<label class="field"><span>Fuente</span><select id="en-type" class="select" value=${tipo} onChange=${(e) => setTipo(e.target.value)}>${Object.entries(MEASURE_TYPES).map(([k, v]) => html`<option value=${k}>${v}</option>`)}</select></label>`}
       </div>
 
       <div class="panel stack-sm">
         <span class="eyebrow">Capturas</span>
-        <p class="small muted">${isNut ? 'Captura del resumen del día (o de la semana) en Fitia.' : 'Informe de antropometría, app de la báscula o Samsung Health.'}${imgCaps ? ' Claude leerá los valores.' : ' En esta vista Claude no puede leer imágenes; se guardan como respaldo.'}</p>
+        <p class="small muted">${isWeek ? 'Captura del “Score nutricional” de la semana en Fitia (puedes subir varias pantallas).' : isNut ? 'Captura del resumen del día en Fitia.' : 'Informe de antropometría, app de la báscula o Samsung Health.'}${imgCaps ? ' Claude leerá los valores.' : ' En esta vista Claude no puede leer imágenes; se guardan como respaldo.'}</p>
         <input id="en-files" type="file" accept="image/*" multiple onChange=${pick} />
         ${previews.length ? html`<div class="thumbs">${previews.map((u) => html`<img src=${u} alt="Captura seleccionada" />`)}</div>` : null}
         ${entry?.imagenes?.length ? html`<div class="thumbs">${entry.imagenes.map((id) => html`<img src=${assetUrl(id)} alt="Captura guardada" />`)}</div>` : null}
@@ -92,7 +111,11 @@ function EntrySheet({ kind, entry, onClose }) {
               <input id=${'v-' + f.key} class="input num" inputmode="decimal" value=${vals[f.key] ?? ''} onInput=${(e) => setVals({ ...vals, [f.key]: e.target.value })} /></label>`)}
           </div>
         </div>`)}
-      ${!isNut && html`<button class="btn btn-ghost btn-sm" style="align-self:flex-start" onClick=${() => setShowAll(!showAll)}>${showAll ? 'Mostrar solo los llenos' : 'Mostrar todos los campos (perímetros, pliegues, somatotipo)'}</button>`}
+      ${!isWeek && html`<button class="btn btn-ghost btn-sm" style="align-self:flex-start" onClick=${() => setShowAll(!showAll)}>${showAll ? 'Mostrar solo los llenos' : isNut ? 'Mostrar detalle (saturadas, azúcar, sal, sodio, alcohol)' : 'Mostrar todos los campos (perímetros, pliegues, somatotipo)'}</button>`}
+      ${isWeek && (notes2.fortalezas.length || notes2.mejoras.length) ? html`<div class="stack-sm">
+        ${notes2.fortalezas.length ? html`<span class="eyebrow">Lo que hiciste bien</span><ul class="small" style="margin:0;padding-left:18px">${notes2.fortalezas.map((t) => html`<li>${t}</li>`)}</ul>` : null}
+        ${notes2.mejoras.length ? html`<span class="eyebrow">Por mejorar</span><ul class="small" style="margin:0;padding-left:18px">${notes2.mejoras.map((t) => html`<li>${t}</li>`)}</ul>` : null}
+      </div>` : null}
       ${otros.length ? html`<div class="stack-sm"><span class="eyebrow">Otros datos de la captura</span><p class="small muted">${otros.map((o) => `${o.nombre}: ${o.valor}${o.unidad ? ' ' + o.unidad : ''}`).join(' · ')}</p></div>` : null}
       <label class="field"><span>Notas</span><textarea id="en-notes" class="textarea" style="min-height:64px" value=${notas} onInput=${(e) => setNotas(e.target.value)}></textarea></label>
       ${err && html`<p class="small" style="color:var(--bad)">${err}</p>`}
@@ -100,7 +123,7 @@ function EntrySheet({ kind, entry, onClose }) {
         <button class="btn btn-primary" disabled=${busy === 'save'} onClick=${save}>${busy === 'save' ? 'Guardando…' : 'Guardar'}</button>
         ${entry && html`<button class="btn btn-ghost btn-danger" onClick=${() => setConfirmDel(true)}><${Icon} name="trash" /> Eliminar</button>`}
       </div>
-      ${confirmDel && html`<${Confirm} title="Eliminar registro" text=${`Se borra el registro del ${fmtDay(entry.date)}.`} onConfirm=${async () => { await deleteDoc(isNut ? 'nutrition' : 'measurements', entry.id); onClose(); }} onClose=${() => setConfirmDel(false)} />`}
+      ${confirmDel && html`<${Confirm} title="Eliminar registro" text=${isWeek ? `Se borra el score semanal del ${fmtDay(entry.date)}.` : `Se borra el registro del ${fmtDay(entry.date)}.`} onConfirm=${async () => { await deleteDoc(isNut ? 'nutrition' : 'measurements', entry.id); onClose(); }} onClose=${() => setConfirmDel(false)} />`}
     </${Sheet}>`;
 }
 
@@ -138,30 +161,54 @@ function Measures({ list, open }) {
 }
 
 function Nutrition({ list, open }) {
-  const sorted = [...list].sort((a, b) => (a.date < b.date ? -1 : 1));
+  const days = list.filter((n) => !isWeekly(n));
+  const weeks = list.filter(isWeekly).sort((a, b) => (a.date < b.date ? 1 : -1));
+  const sorted = [...days].sort((a, b) => (a.date < b.date ? -1 : 1));
   const since = dateKey(addDays(new Date(), -6));
   const last7 = sorted.filter((n) => n.date >= since);
-  const avg = (k) => { const v = last7.map((n) => num(n.valores?.[k])).filter((x) => x != null); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
-  const pts = (k) => sorted.slice(-30).filter((n) => n.valores?.[k] != null).map((n) => ({ x: fmtShort(n.date), y: Number(n.valores[k]) }));
+  const base = last7.length ? last7 : sorted.slice(-7);
+  const avg = (k) => { const v = base.map((n) => num(n.valores?.[k])).filter((x) => x != null); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
+  const pts = (k) => sorted.slice(-30).map((n) => ({ x: fmtShort(n.date), y: n.valores?.[k] != null ? Number(n.valores[k]) : null }));
+  const has = (k) => sorted.some((n) => n.valores?.[k] != null);
   if (!list.length) return html`<div class="empty"><p>Sube la captura del resumen diario de Fitia y Claude registra calorías y macros.</p><button class="btn btn-primary" onClick=${() => open({})}><${Icon} name="camera" /> Subir captura de Fitia</button></div>`;
   return html`
     <div class="stack">
       <div class="kpis">
-        ${[['kcal', 'Calorías', 'kcal'], ['proteina', 'Proteína', 'g'], ['carbohidratos', 'Carbos', 'g'], ['grasa', 'Grasa', 'g']].map(([k, l, u]) => html`
-          <div class="kpi"><span class="eyebrow">${l} · prom. 7 d</span><span class="v">${avg(k) == null ? '—' : fmtNum(avg(k), 0)}<small>${u}</small></span><span class="delta flat">${last7.length} días registrados</span></div>`)}
+        ${[['kcal', 'Calorías', 'kcal', 'kcalObjetivo'], ['proteina', 'Proteína', 'g', 'proteinaObjetivo'], ['carbohidratos', 'Carbos', 'g', 'carbObjetivo'], ['grasa', 'Grasa', 'g', 'grasaObjetivo']].map(([k, l, u, meta]) => html`
+          <div class="kpi"><span class="eyebrow">${l} · prom. ${last7.length ? '7 d' : 'últimos 7 reg.'}</span><span class="v">${avg(k) == null ? '—' : fmtNum(avg(k), 0)}<small>${u}</small></span><span class="delta flat">${avg(meta) != null ? `meta ${fmtNum(avg(meta), 0)} ${u} · ` : ''}${last7.length ? `${last7.length} de 7 días` : `último: ${fmtShort(sorted[sorted.length - 1]?.date || todayKey())}`}</span></div>`)}
       </div>
       <div class="anat-wrap">
-        <div class="card stack-sm"><span class="eyebrow">Calorías</span><${LineChart} series=${[{ name: 'kcal', points: pts('kcal') }]} /></div>
-        <div class="card stack-sm"><span class="eyebrow">Proteína · g</span><${LineChart} series=${[{ name: 'Proteína', points: pts('proteina') }]} /></div>
+        <div class="card stack-sm"><span class="eyebrow">Calorías · consumidas y meta</span><${LineChart} series=${[{ name: 'kcal', points: pts('kcal') }, ...(has('kcalObjetivo') ? [{ name: 'Meta', points: pts('kcalObjetivo') }] : [])]} /></div>
+        <div class="card stack-sm"><span class="eyebrow">Proteína · g, con meta</span><${LineChart} series=${[{ name: 'Proteína', points: pts('proteina') }, ...(has('proteinaObjetivo') ? [{ name: 'Meta', points: pts('proteinaObjetivo') }] : [])]} /></div>
       </div>
-      <div class="card mlist" style="padding:4px 12px">
-        ${[...sorted].reverse().slice(0, 30).map((n) => html`
-          <button class="mrow" style="grid-template-columns:6rem 1fr auto" onClick=${() => open({ entry: n })}>
-            <span class="name">${fmtShort(n.date)}</span>
-            <span class="small muted num">P ${fmtNum(n.valores?.proteina, 0)} · C ${fmtNum(n.valores?.carbohidratos, 0)} · G ${fmtNum(n.valores?.grasa, 0)}</span>
-            <span class="val">${fmtNum(n.valores?.kcal, 0)}</span>
-          </button>`)}
-      </div>
+
+      <section class="section">
+        <div class="row-between"><span class="eyebrow">Score nutricional semanal</span>
+          <button class="btn btn-sm" onClick=${() => open({ weekly: true })}><${Icon} name="camera" size="16" /> Subir score semanal</button></div>
+        ${weeks.length ? html`<div class="card mlist" style="padding:4px 12px">${weeks.map((w) => html`
+          <button class="mrow" style="grid-template-columns:1fr auto" onClick=${() => open({ entry: w })}>
+            <span><span class="name">${fmtShort(w.date)}${w.dateEnd ? ` – ${fmtShort(w.dateEnd)}` : ''}</span><br /><span class="xs muted num">${fmtNum(w.valores?.kcal, 0)} kcal · P ${fmtNum(w.valores?.proteina, 0)} g promedio${w.mejoras?.length ? ` · mejorar: ${w.mejoras[0]}` : ''}</span></span>
+            <span class="val">${w.valores?.score != null ? `${fmtNum(w.valores.score, 1)}${w.valores.scoreMax ? `/${fmtNum(w.valores.scoreMax, 0)}` : ''}` : '—'}</span>
+          </button>`)}</div>` : html`<p class="small muted">Al cerrar la semana, sube la captura del Score nutricional de Fitia. Claude guarda el puntaje, los promedios y lo que la app te sugiere mejorar.</p>`}
+      </section>
+
+      <section class="section">
+        <span class="eyebrow">Días registrados</span>
+        <div class="card mlist" style="padding:4px 12px">
+          ${[...sorted].reverse().slice(0, 45).map((n, i, arr) => {
+            const gap = i > 0 ? daysBetween(n.date, arr[i - 1].date) - 1 : 0;
+            const k = num(n.valores?.kcal); const o = num(n.valores?.kcalObjetivo);
+            return html`
+              ${gap > 0 ? html`<div class="xs muted" style="padding:6px 0">${gap === 1 ? '1 día' : `${gap} días`} sin registro</div>` : null}
+              <button class="mrow" style="grid-template-columns:4.2rem 1fr auto" onClick=${() => open({ entry: n })}>
+                <span class="name">${fmtShort(n.date)}</span>
+                <span class="small muted num">P ${fmtNum(n.valores?.proteina, 0)} · C ${fmtNum(n.valores?.carbohidratos, 0)} · G ${fmtNum(n.valores?.grasa, 0)}</span>
+                <span class="val" style=${k != null && o ? `color:${k > o * 1.1 ? 'var(--warn)' : 'inherit'}` : ''}>${fmtNum(k, 0)}${o ? html`<small class="muted">/${fmtNum(o, 0)}</small>` : null}</span>
+              </button>`;
+          })}
+        </div>
+        <p class="xs muted">Calorías consumidas / meta de Fitia. En ámbar, los días más de 10 % sobre la meta.</p>
+      </section>
     </div>`;
 }
 
@@ -180,8 +227,8 @@ export function BodyView() {
       ${tab === 'medidas' ? html`<${Measures} list=${st.measurements} open=${setSheet} />` : html`<${Nutrition} list=${st.nutrition} open=${setSheet} />`}
       <section class="panel stack-sm small">
         <span class="eyebrow">Cada cuánto</span>
-        <p>Báscula o Samsung Watch: 1 vez por semana, mismo día y en ayunas. Antropometría ISAK: cada 4 a 8 semanas. Fitia: la captura del día al acostarte, o una semanal con el promedio.</p>
+        <p>Báscula o Samsung Watch: 1 vez por semana, mismo día y en ayunas. Antropometría ISAK: cada 4 a 8 semanas. Fitia: la captura del día al acostarte y, al cerrar la semana, la del Score nutricional.</p>
       </section>
-      ${sheet && html`<${EntrySheet} kind=${sheet.kind || kind} entry=${sheet.entry} onClose=${() => setSheet(null)} />`}
+      ${sheet && html`<${EntrySheet} kind=${sheet.kind || kind} entry=${sheet.entry} weekly=${sheet.weekly} onClose=${() => setSheet(null)} />`}
     </div>`;
 }

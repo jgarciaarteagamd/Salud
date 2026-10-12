@@ -4,6 +4,7 @@ import { planSession, errorCopy, getSample } from '../ai.js';
 import { MUSCLES, muscleShort } from '../muscles.js';
 import { todayKey, fmtDay, isWorkSet } from '../stats.js';
 import { SessionEditor, makeItem } from './session.js';
+import { ActivitySheet, activityTitle, activitySubtitle } from './cardio.js';
 import { Celebration } from './celebrate.js';
 import { Icon, Sheet, Thinking, toast, Confirm } from '../ui.js';
 const { html, useState, useEffect, useRef } = window.htmPreact;
@@ -16,31 +17,42 @@ async function planToSession(plan, checkin) {
   const { exercises, sessions } = getState();
   const byId = Object.fromEntries(exercises.map((e) => [e.id, e]));
   const items = [];
-  for (const p of plan.ejercicios || []) {
-    let ex = p.exerciseId ? byId[p.exerciseId] : null;
-    if (!ex && p.nuevo?.name) {
-      const id = `${slug(p.nuevo.name) || 'ejercicio'}-${Math.random().toString(36).slice(2, 5)}`;
-      ex = {
-        id, name: p.nuevo.name, primary: validMuscles(p.nuevo.primary), secondary: validMuscles(p.nuevo.secondary),
-        equipment: p.nuevo.equipment || (lugar === 'freeletics' ? 'Peso corporal' : ''), knee: p.nuevo.knee || 'ok', back: p.nuevo.back || 'ok', modalidad: lugar,
-        createdAt: new Date().toISOString(), createdBy: 'claude',
+  const notes = { calentamiento: [], enfriamiento: [] };
+  // Calentamiento y vuelta a la calma llegan como ejercicios (igual que el bloque); si Claude
+  // manda texto suelto o un ejercicio que no se puede resolver, queda como nota de esa fase.
+  const phases = [['calentamiento', plan.calentamiento], [null, plan.ejercicios], ['enfriamiento', plan.vuelta_calma]];
+  for (const [fase, list] of phases) {
+    for (const p of Array.isArray(list) ? list : []) {
+      if (typeof p === 'string') { if (fase) notes[fase].push(p); continue; }
+      if (!p || typeof p !== 'object') continue;
+      let ex = p.exerciseId ? byId[p.exerciseId] : null;
+      if (!ex && p.nuevo?.name) {
+        const id = `${slug(p.nuevo.name) || 'ejercicio'}-${Math.random().toString(36).slice(2, 5)}`;
+        const categoria = ['fuerza', 'movilidad', 'cardio'].includes(p.nuevo.categoria) ? p.nuevo.categoria : fase ? 'movilidad' : 'fuerza';
+        ex = {
+          id, name: p.nuevo.name, primary: validMuscles(p.nuevo.primary), secondary: validMuscles(p.nuevo.secondary),
+          equipment: p.nuevo.equipment || (lugar === 'freeletics' ? 'Peso corporal' : ''), knee: p.nuevo.knee || 'ok', back: p.nuevo.back || 'ok', modalidad: lugar,
+          categoria, medida: p.nuevo.medida === 'tiempo' || (!p.reps && p.segundos) ? 'tiempo' : 'reps',
+          createdAt: new Date().toISOString(), createdBy: 'claude',
+        };
+        await saveDoc('exercises', id, ex);
+        byId[id] = ex;
+      }
+      if (!ex) { if (fase && (p.nota || p.exerciseId)) notes[fase].push(p.nota || p.exerciseId); continue; }
+      const rest = parseInt(p.descansoSeg, 10);
+      const planned = {
+        series: Math.max(1, Math.min(8, parseInt(p.series, 10) || (fase ? 1 : 3))), reps: p.reps ?? '', segundos: parseInt(p.segundos, 10) || null,
+        peso: p.peso === null || p.peso === undefined || p.peso === '' ? null : Number(p.peso),
+        rir: p.rir ?? null, descansoSeg: fase ? (Number.isFinite(rest) ? rest : 0) : rest || 90, nota: p.nota || '',
       };
-      await saveDoc('exercises', id, ex);
-      byId[id] = ex;
+      items.push(makeItem(ex, { origin: 'plan', planned, sessions, fase }));
     }
-    if (!ex) continue;
-    const planned = {
-      series: Math.max(1, Math.min(8, parseInt(p.series, 10) || 3)), reps: p.reps ?? '', segundos: parseInt(p.segundos, 10) || null,
-      peso: p.peso === null || p.peso === undefined || p.peso === '' ? null : Number(p.peso),
-      rir: p.rir ?? null, descansoSeg: parseInt(p.descansoSeg, 10) || 90, nota: p.nota || '',
-    };
-    items.push(makeItem(ex, { origin: 'plan', planned, sessions }));
   }
   return {
     id: newId('s'), date: todayKey(), status: 'plan', source: 'ia', lugar,
     title: plan.titulo || 'Sesión de hoy', enfoque: validMuscles(plan.enfoque),
     plan: {
-      razonamiento: plan.razonamiento || '', calentamiento: plan.calentamiento || [], vuelta_calma: plan.vuelta_calma || [],
+      razonamiento: plan.razonamiento || '', calentamiento: notes.calentamiento, vuelta_calma: notes.enfriamiento,
       precauciones: plan.precauciones || [], generadoEn: new Date().toISOString(), checkin,
     },
     checkin, items, createdAt: new Date().toISOString(),
@@ -107,6 +119,7 @@ export function TodayView({ go }) {
   const open = st.sessions.filter((s) => s.status === 'plan' || s.status === 'en_curso').sort((a, b) => (a.date < b.date ? 1 : -1));
   const current = open[0];
   const savedToday = st.sessions.filter((s) => s.date === todayKey() && s.status === 'guardada');
+  const cardioToday = (st.activities || []).filter((a) => a.date === todayKey());
 
   async function startEmpty(lugar = 'forus') {
     const s = { id: newId('s'), date: todayKey(), status: 'en_curso', source: 'manual', lugar, title: lugar === 'freeletics' ? 'Freeletics libre' : 'Sesión libre', items: [], createdAt: new Date().toISOString() };
@@ -140,10 +153,12 @@ export function TodayView({ go }) {
       <button class="btn btn-xl btn-block" onClick=${() => setSheet('checkin-fl')} disabled=${!hasAI}><${Icon} name="spark" /> Sesión Freeletics en casa</button>
       ${!hasAI && html`<p class="small muted">Claude no está disponible en esta vista. Abre la app desde claude.ai para generar sesiones; mientras tanto puedes registrar una sesión libre.</p>`}
       <div class="row"><button class="btn grow" onClick=${() => startEmpty('forus')}><${Icon} name="plus" /> Libre en Forus</button><button class="btn grow" onClick=${() => startEmpty('freeletics')}><${Icon} name="plus" /> Libre en casa</button></div>
-      ${savedToday.length ? html`
+      <button class="btn btn-block" onClick=${() => setSheet('cardio')}><${Icon} name="swim" /> Registrar natación o cardio</button>
+      ${savedToday.length || cardioToday.length ? html`
         <section class="section">
           <span class="eyebrow">Ya guardaste hoy</span>
           ${savedToday.map((s) => html`<button class="card row-between" style="text-align:left;cursor:pointer" onClick=${() => go('historial', s.id)}><b>${s.title}</b><${Icon} name="chevron" /></button>`)}
+          ${cardioToday.map((a) => html`<button class="card row-between" style="text-align:left;cursor:pointer" onClick=${() => setSheet({ cardio: a })}><span><b>${activityTitle(a)}</b><br /><span class="xs muted">${activitySubtitle(a)}</span></span><${Icon} name="chevron" /></button>`)}
         </section>` : null}
       <section class="panel stack-sm">
         <span class="eyebrow">Cómo funciona</span>
@@ -155,6 +170,7 @@ export function TodayView({ go }) {
         </ul>
       </section>
       ${(sheet === 'checkin' || sheet === 'checkin-fl') && html`<${CheckinSheet} lugar=${sheet === 'checkin-fl' ? 'freeletics' : 'forus'} profile=${st.profile} onClose=${() => setSheet(null)} onPlanned=${() => { setSheet(null); toast('Sesión lista'); }} />`}
+      ${(sheet === 'cardio' || sheet?.cardio) && html`<${ActivitySheet} entry=${sheet?.cardio} onClose=${() => setSheet(null)} />`}
       ${celebration}
     </div>`;
 }

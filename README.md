@@ -1,6 +1,6 @@
 # Fitness Log
 
-App para registrar las sesiones de gimnasio en Forus. Claude arma la sesión del día según tu historial, tus antecedentes de rodilla derecha y espalda, tus medidas y tu nutrición. Tú registras cada serie (repeticiones, peso, RIR) y ves tu progreso en un mapa muscular.
+App para registrar las sesiones de gimnasio en Forus, Freeletics en casa y el cardio (natación, caminata…). Claude arma la sesión del día según tu historial, tus antecedentes de rodilla derecha y espalda, tus medidas y tu nutrición. Tú registras cada serie (repeticiones, peso, RIR) y ves tu progreso en un mapa muscular. Un coach de fitness y nutrición responde tus preguntas con todos tus datos a la vista.
 
 **App publicada:** https://claude.ai/artifact/EbfYPnw674NNMjvdbyHJDj (privada, se abre desde tu cuenta de claude.ai en el celular o la computadora).
 
@@ -8,10 +8,11 @@ App para registrar las sesiones de gimnasio en Forus. Claude arma la sesión del
 
 | Pestaña | Qué hace |
 |---|---|
-| **Inicio** | Mapa muscular (frente y espalda) coloreado por series de la semana, promedio de 4 semanas o cambio de fuerza. Al tocar un músculo ves sus series por semana frente al rango objetivo y el 1RM estimado de cada ejercicio. También muestra indicadores, composición corporal y récords. |
-| **Hoy** | **Configurar sesión con Claude**: indicas tiempo, energía, dolor de rodilla y de espalda, y el enfoque que prefieres. Cada ejercicio tiene una tabla donde cada fila es una serie (reps, peso, RIR). Puedes sustituir (con motivo), omitir (con motivo), agregar ejercicios, usar el temporizador de descanso y cerrar con **Guardar sesión**. El borrador se sincroniza mientras entrenas. |
-| **Historial** | Sesiones guardadas por mes, con marcas de lo omitido, sustituido o agregado. Cualquier sesión se puede abrir, corregir o eliminar. |
-| **Cuerpo** | Medidas (antropometría, bioimpedancia, Samsung Watch) y nutrición (Fitia). Subes la captura, Claude extrae los valores, los revisas y guardas. También se pueden cargar a mano. |
+| **Inicio** | Mapa muscular (frente y espalda) coloreado por series de la semana, promedio de 4 semanas o cambio de fuerza. Al tocar un músculo ves sus series por semana frente al rango objetivo y el 1RM estimado de cada ejercicio. También muestra indicadores (incluidos los minutos de cardio de la semana), composición corporal y récords. |
+| **Hoy** | **Configurar sesión con Claude**: indicas tiempo, energía, dolor de rodilla y de espalda, y el enfoque que prefieres. Cada ejercicio tiene una tabla donde cada fila es una serie (reps, peso, RIR). Puedes sustituir (con motivo), omitir (con motivo), agregar ejercicios, usar el temporizador de descanso y cerrar con **Guardar sesión**. El borrador se sincroniza mientras entrenas. **Registrar natación o cardio**: subes la captura de Samsung Health, Claude lee distancia, duración, ritmo, FC, calorías, brazadas, SWOLF y largos, y la revisas antes de guardar. |
+| **Historial** | Sesiones y cardio por mes, con marcas de lo omitido, sustituido o agregado. Filtro por músculo o por cardio. Todo se puede abrir, corregir o eliminar. |
+| **Cuerpo** | Medidas (antropometría, bioimpedancia, Samsung Watch) y nutrición (Fitia): resumen del día y **Score nutricional semanal**. Subes la captura, Claude extrae los valores, los revisas y guardas. También se pueden cargar a mano. La lista de días marca los huecos sin registro. |
+| **Coach** | Chat con un asistente experto en fitness y nutrición. En cada mensaje recibe tu perfil, sesiones, cardio, medidas, días de Fitia, scores semanales y el catálogo. Puedes adjuntar fotos. Las conversaciones se guardan y se sincronizan. |
 | **Más** | Catálogo de ejercicios (crear, editar, eliminar, subir dibujo, prompt de Higgsfield), perfil para Claude y resumen para el proyecto Mi Salud. |
 
 ## Cómo usa Claude los cambios que haces
@@ -27,7 +28,9 @@ Los datos viven en la base de datos del artifact y se sincronizan entre disposit
 | `exercises/{id}` | `name`, `primary[]`, `secondary[]`, `equipment`, `knee`/`back` (`ok`·`precaucion`·`evitar`), `cues`, `image` o `imageAsset` |
 | `sessions/{id}` | `date`, `status` (`plan`·`en_curso`·`guardada`), `title`, `plan` (razonamiento, calentamiento, precauciones), `checkin`, `items[]` (cada uno con `sets[]` de `{reps, weight, rir, done}`), `post` (RPE, dolor al terminar), `editLog[]` |
 | `measurements/{id}` | `date`, `tipo`, `valores{}` (ver `app/js/fields.js`), `imagenes[]` |
-| `nutrition/{id}` | `date`, `valores{kcal, proteina, carbohidratos, grasa…}`, `imagenes[]` |
+| `nutrition/{id}` | `date`, `periodo` (`dia`·`semana`; la semana lleva `dateEnd`, `fortalezas[]`, `mejoras[]`), `valores{kcal, proteina, carbohidratos, grasa, metas, grasaSat, azucar, sal, sodio…; score en la semana}`, `imagenes[]` |
+| `activities/{id}` | `date`, `hora`, `tipo` (`natacion`·`caminata`·`carrera`·`bicicleta`·`eliptica`·`otro`), `valores{distancia m, duracionMin, activoMin, fcMedia, kcal, brazadas, swolf…}`, `largos[]`, `zonasFC`, `imagenes[]` |
+| `chats/{id}` | `title`, `messages[]` de `{role, content, at}` |
 | `profile/main` | Datos personales, objetivo, antecedentes y el contexto pegado desde Mi Salud |
 
 Músculos y rangos semanales de series: `app/js/muscles.js`. 1RM estimado: Epley ajustado por RIR (`peso × (1 + (reps + RIR) / 30)`).

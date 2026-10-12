@@ -1,14 +1,16 @@
-// Historial: todas las sesiones guardadas, agrupadas por mes; cada una se puede abrir y corregir.
+// Historial: sesiones guardadas y actividades de cardio, agrupadas por mes; cada una se puede abrir y corregir.
 import { useStore } from '../store.js';
 import { MUSCLES, muscleShort } from '../muscles.js';
 import { completedSessions, monthLabel, parseDay, DIAS_CORTOS, sessionSetCount, sessionVolume, sessionMuscles, sessionChanges, fmtNum } from '../stats.js';
 import { SessionEditor } from './session.js';
+import { ActivityCard, ActivitySheet } from './cardio.js';
 import { Icon } from '../ui.js';
 const { html, useState, useMemo } = window.htmPreact;
 
 export function HistoryView({ param, go }) {
   const st = useStore();
   const [m, setM] = useState('');
+  const [act, setAct] = useState(null);
   const sessions = useMemo(() => completedSessions(st.sessions).filter((s) => s.status === 'guardada'), [st.sessions]);
   const opened = param ? st.sessions.find((s) => s.id === param) : null;
 
@@ -20,7 +22,11 @@ export function HistoryView({ param, go }) {
       </div>`;
   }
 
-  const list = sessions.filter((s) => !m || sessionMuscles(s).includes(m));
+  const acts = (st.activities || []).map((a) => ({ ...a, kind: 'cardio' }));
+  const list = [
+    ...(m === 'cardio' ? [] : sessions.filter((s) => !m || sessionMuscles(s).includes(m))),
+    ...(!m || m === 'cardio' ? acts : []),
+  ].sort((a, b) => (a.date === b.date ? (a.kind === 'cardio' ? 1 : -1) : a.date < b.date ? 1 : -1));
   const groups = [];
   for (const s of list) {
     const k = s.date.slice(0, 7);
@@ -30,16 +36,18 @@ export function HistoryView({ param, go }) {
 
   return html`
     <div class="stack">
-      <header class="hello"><span class="eyebrow">${sessions.length} sesiones guardadas</span><h1>Historial</h1></header>
+      <header class="hello"><span class="eyebrow">${sessions.length} sesiones${acts.length ? ` · ${acts.length} de cardio` : ''}</span><h1>Historial</h1></header>
       <div class="chips">
         <button class="chip" aria-pressed=${!m} onClick=${() => setM('')}>Todas</button>
+        <button class="chip" aria-pressed=${m === 'cardio'} onClick=${() => setM(m === 'cardio' ? '' : 'cardio')}>Cardio</button>
         ${MUSCLES.map((mm) => html`<button class="chip" aria-pressed=${m === mm.id} onClick=${() => setM(m === mm.id ? '' : mm.id)}>${muscleShort(mm.id)}</button>`)}
       </div>
-      ${!list.length && html`<div class="empty"><p>${sessions.length ? 'Ninguna sesión trabajó ese músculo.' : 'Aún no hay sesiones guardadas. Configura la de hoy y al terminar toca “Guardar sesión”.'}</p>${!sessions.length && html`<button class="btn btn-primary" onClick=${() => go('hoy')}>Ir a Hoy</button>`}</div>`}
+      ${!list.length && html`<div class="empty"><p>${m === 'cardio' ? 'Aún no registras cardio. En Hoy toca “Registrar natación o cardio”.' : sessions.length ? 'Ninguna sesión trabajó ese músculo.' : 'Aún no hay sesiones guardadas. Configura la de hoy y al terminar toca “Guardar sesión”.'}</p>${!sessions.length && html`<button class="btn btn-primary" onClick=${() => go('hoy')}>Ir a Hoy</button>`}</div>`}
       ${groups.map((g) => html`
         <div class="stack-sm">
           <div class="month">${g.label}</div>
           ${g.items.map((s) => {
+            if (s.kind === 'cardio') return html`<${ActivityCard} a=${s} onOpen=${() => setAct(s)} />`;
             const d = parseDay(s.date); const ch = sessionChanges(s); const mus = sessionMuscles(s);
             return html`
               <button class="card hcard" onClick=${() => go('historial', s.id)}>
@@ -60,5 +68,6 @@ export function HistoryView({ param, go }) {
               </button>`;
           })}
         </div>`)}
+      ${act && html`<${ActivitySheet} entry=${st.activities.find((a) => a.id === act.id) || act} onClose=${() => setAct(null)} />`}
     </div>`;
 }

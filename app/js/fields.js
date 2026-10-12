@@ -68,16 +68,90 @@ export const MEASURE_GROUPS = [
 export const MEASURE_FIELDS = MEASURE_GROUPS.flatMap((g) => g.fields);
 export const MEASURE_FIELD = Object.fromEntries(MEASURE_FIELDS.map((f) => [f.key, f]));
 
-export const NUTRITION_FIELDS = [
-  { key: 'kcal', label: 'Calorías', unit: 'kcal' },
-  { key: 'proteina', label: 'Proteína', unit: 'g' },
-  { key: 'carbohidratos', label: 'Carbohidratos', unit: 'g' },
-  { key: 'grasa', label: 'Grasa', unit: 'g' },
-  { key: 'fibra', label: 'Fibra', unit: 'g' },
-  { key: 'agua', label: 'Agua', unit: 'L' },
-  { key: 'kcalObjetivo', label: 'Meta de calorías', unit: 'kcal' },
-  { key: 'proteinaObjetivo', label: 'Meta de proteína', unit: 'g' },
+export const NUTRITION_GROUPS = [
+  {
+    title: 'Del día',
+    fields: [
+      { key: 'kcal', label: 'Calorías', unit: 'kcal' },
+      { key: 'proteina', label: 'Proteína', unit: 'g' },
+      { key: 'carbohidratos', label: 'Carbohidratos', unit: 'g' },
+      { key: 'grasa', label: 'Grasa', unit: 'g' },
+      { key: 'fibra', label: 'Fibra', unit: 'g' },
+      { key: 'agua', label: 'Agua', unit: 'L' },
+    ],
+  },
+  {
+    title: 'Metas de Fitia',
+    fields: [
+      { key: 'kcalObjetivo', label: 'Meta de calorías', unit: 'kcal' },
+      { key: 'proteinaObjetivo', label: 'Meta de proteína', unit: 'g' },
+      { key: 'carbObjetivo', label: 'Meta de carbohidratos', unit: 'g' },
+      { key: 'grasaObjetivo', label: 'Meta de grasa', unit: 'g' },
+    ],
+  },
+  {
+    title: 'Detalle',
+    fields: [
+      { key: 'grasaSat', label: 'Grasa saturada', unit: 'g' },
+      { key: 'grasaTrans', label: 'Grasa trans', unit: 'g' },
+      { key: 'azucar', label: 'Azúcar', unit: 'g' },
+      { key: 'sal', label: 'Sal', unit: 'g' },
+      { key: 'sodio', label: 'Sodio', unit: 'mg' },
+      { key: 'alcohol', label: 'Alcohol', unit: 'g' },
+    ],
+  },
 ];
+export const NUTRITION_FIELDS = NUTRITION_GROUPS.flatMap((g) => g.fields);
+
+// Resumen semanal de Fitia ("Score nutricional"): puntaje y promedios diarios de la semana.
+export const WEEKLY_GROUPS = [
+  {
+    title: 'Score nutricional',
+    fields: [
+      { key: 'score', label: 'Puntaje', unit: '' },
+      { key: 'scoreMax', label: 'Puntaje máximo', unit: '' },
+      { key: 'diasRegistrados', label: 'Días registrados', unit: 'días' },
+    ],
+  },
+  { title: 'Promedio diario de la semana', fields: NUTRITION_GROUPS[0].fields.filter((f) => f.key !== 'agua').concat(NUTRITION_GROUPS[1].fields.slice(0, 2)) },
+];
+export const WEEKLY_FIELDS = WEEKLY_GROUPS.flatMap((g) => g.fields);
+export const isWeekly = (n) => n?.periodo === 'semana';
+
+// Actividades de cardio (natación, caminata, bicicleta…), normalmente desde Samsung Health.
+export const ACTIVITY_TYPES = {
+  natacion: 'Natación',
+  caminata: 'Caminata',
+  carrera: 'Carrera',
+  bicicleta: 'Bicicleta',
+  eliptica: 'Elíptica',
+  otro: 'Otra actividad',
+};
+export const ACTIVITY_FIELDS = [
+  { key: 'distancia', label: 'Distancia', unit: 'm' },
+  { key: 'duracionMin', label: 'Duración total', unit: 'min' },
+  { key: 'activoMin', label: 'Tiempo en movimiento', unit: 'min' },
+  { key: 'fcMedia', label: 'FC media', unit: 'lpm' },
+  { key: 'fcMax', label: 'FC máxima', unit: 'lpm' },
+  { key: 'kcal', label: 'Calorías', unit: 'kcal' },
+  { key: 'pasos', label: 'Pasos', unit: '' },
+  { key: 'brazadas', label: 'Brazadas', unit: '' },
+  { key: 'swolf', label: 'SWOLF medio', unit: '' },
+  { key: 'largoPiscina', label: 'Largo de la piscina', unit: 'm' },
+];
+// Ritmo por 100 m (natación) o por km (resto), en segundos.
+export function activityPace(a) {
+  const d = Number(a?.valores?.distancia); const t = Number(a?.valores?.activoMin || a?.valores?.duracionMin);
+  if (!d || !t) return null;
+  const per = a.tipo === 'natacion' ? 100 : 1000;
+  return (t * 60) / (d / per);
+}
+export const fmtClock = (secs) => {
+  if (secs == null || !Number.isFinite(secs)) return '—';
+  const s = Math.round(secs); const h = Math.floor(s / 3600); const m = Math.floor((s % 3600) / 60); const r = s % 60;
+  return h ? `${h}:${String(m).padStart(2, '0')}:${String(r).padStart(2, '0')}` : `${m}:${String(r).padStart(2, '0')}`;
+};
+export const paceLabel = (a) => { const p = activityPace(a); return p == null ? null : `${fmtClock(p)} /${a.tipo === 'natacion' ? '100 m' : 'km'}`; };
 
 // Prioridad cuando un mismo valor viene de varias fuentes el mismo día:
 // el reloj (Samsung Health) es la referencia; luego báscula, cinta y registro manual.
