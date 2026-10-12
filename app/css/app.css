@@ -349,3 +349,10 @@ input[type="range"] { accent-color: var(--accent); width: 100%; }
 .fl-list { margin: 0; padding: 8px 12px 8px 34px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-sm); display: grid; gap: 2px; font-size: var(--t-sm); max-height: 50vh; overflow: auto; }
 .fl-list li { padding: 3px 0; font-weight: 600; }
 .fl-list li.pausa { font-weight: 400; color: var(--muted); }
+.sides { display: flex; gap: 4px; }
+.sides input { min-width: 0; width: 50%; }
+.side-head { display: flex; gap: 4px; font-size: .62rem; letter-spacing: .04em; color: var(--muted); }
+.side-head span { flex: 1; text-align: center; }
+.watch-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; }
+.watch-kpis > div { display: grid; gap: 2px; padding: 8px 10px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-sm); }
+.watch-kpis b { font-family: var(--f-display); font-size: 1.35rem; font-weight: 600; line-height: 1; }

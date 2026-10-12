@@ -4,6 +4,7 @@ import { MUSCLES, muscleShort } from '../muscles.js';
 import { completedSessions, monthLabel, parseDay, DIAS_CORTOS, sessionSetCount, sessionVolume, sessionMuscles, sessionChanges, fmtNum } from '../stats.js';
 import { SessionEditor } from './session.js';
 import { ActivityCard, ActivitySheet } from './cardio.js';
+import { watchSummary } from './watch.js';
 import { Icon } from '../ui.js';
 const { html, useState, useMemo } = window.htmPreact;
 
@@ -54,7 +55,8 @@ export function HistoryView({ param, go }) {
                 <div class="hdate"><b>${d.getDate()}</b><span>${DIAS_CORTOS[d.getDay()]}</span></div>
                 <div class="stack-sm" style="gap:4px;min-width:0">
                   <b style="font-family:var(--f-display);font-size:1.15rem;font-weight:600">${s.title || 'Sesión'}</b>
-                  <span class="xs muted num">${sessionSetCount(s)} series · ${fmtNum(sessionVolume(s), 0)} kg${s.post?.rpe ? ` · RPE ${s.post.rpe}` : ''}</span>
+                  <span class="xs muted num">${sessionSetCount(s)} series${sessionVolume(s) ? ` · ${fmtNum(sessionVolume(s), 0)} kg` : ''}${s.post?.rpe ? ` · RPE ${s.post.rpe}` : ''}</span>
+                  ${s.reloj ? html`<span class="xs muted num">Reloj: ${watchSummary(s.reloj)}</span>` : null}
                   <div class="chips">
                     ${mus.slice(0, 4).map((x) => html`<span class="chip">${muscleShort(x)}</span>`)}
                     ${ch.sustituidos ? html`<span class="chip primary">${ch.sustituidos} sustituido${ch.sustituidos > 1 ? 's' : ''}</span>` : null}

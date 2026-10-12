@@ -66,7 +66,9 @@ function sessionLine(s) {
     parts.push(`  - ${it.name}${tag}: ${sets || 'sin series registradas'}${it.note ? ` · nota: ${it.note}` : ''}`);
   }
   const post = s.post ? ` · post: RPE ${s.post.rpe ?? '?'}, dolor rodilla ${s.post.dolorRodilla ?? '?'}/10, espalda ${s.post.dolorEspalda ?? '?'}/10${s.post.notas ? `, "${s.post.notas}"` : ''}` : '';
-  return `${s.date} — ${s.lugar === 'freeletics' ? '[Freeletics en casa] ' : ''}${s.title || 'Sesión'}${post}\n${parts.join('\n')}`;
+  const r = s.reloj;
+  const watch = r ? ` · reloj: ${[r.duracionMin && `${fmtNum(r.duracionMin, 0)} min`, r.kcal && `${r.kcal} kcal`, r.fcMedia && `FC media ${r.fcMedia}`, r.fcMax && `FC máx ${r.fcMax}`, r.zonasFC].filter(Boolean).join(', ')}` : '';
+  return `${s.date} — ${s.lugar === 'freeletics' ? '[Freeletics en casa] ' : ''}${s.title || 'Sesión'}${post}${watch}\n${parts.join('\n')}`;
 }
 
 function measurementsBlock(measurements, limit = 4) {
@@ -285,13 +287,13 @@ export async function extractActivity(files, { signal } = {}) {
   const sample = await getSample();
   if (!sample) throw { code: 'not_granted' };
   const keys = ACTIVITY_FIELDS.map((f) => `${f.key} = ${f.label} (${f.unit || 'número'})`).join('\n');
-  const prompt = `Estas imágenes son capturas de una actividad registrada en Samsung Health (Galaxy Watch) u otra app de reloj: natación, caminata, carrera, bicicleta, etc.
+  const prompt = `Estas imágenes son capturas de una actividad registrada en Samsung Health (Galaxy Watch) u otra app de reloj: natación, caminata, carrera, bicicleta, circuito, máquinas de musculación, etc.
 Extrae los datos. Claves de "valores":
 ${keys}
 Convierte la duración a minutos con decimales (46:56 = 46.93). "activoMin" es el tiempo en movimiento si aparece, o calcúlalo con el ritmo medio y la distancia. Distancia en metros.
 Si hay una tabla de largos o vueltas (splits), copia cada fila en "largos" con el tiempo y el descanso tal como aparecen.
 Usa el año ${new Date().getFullYear()} si la captura no lo muestra. No inventes valores que no se vean.
-Responde SOLO con JSON: {"fecha": "AAAA-MM-DD o null", "hora": "HH:MM o null", "tipo": "${Object.keys(ACTIVITY_TYPES).join('|')}", "lugar": "Piscina, Parque… o null", "valores": {"distancia": 550, "duracionMin": 46.93}, "ritmo": "texto del ritmo medio o null", "largos": [{"n": 1, "distancia": 25, "tiempo": "00:52.3", "ritmo": "03'29\\"", "descanso": "00:23.1 o null", "estilo": "Libre"}], "zonasFC": "resumen de las zonas de FC o null", "dispositivo": "Galaxy Watch6 o null", "resumen": "1 frase"}`;
+Responde SOLO con JSON: {"fecha": "AAAA-MM-DD o null", "hora": "HH:MM o null", "actividad": "nombre tal como aparece (p. ej. Piscina, Circuito entrenamiento, Máquinas de musculación)", "tipo": "${Object.keys(ACTIVITY_TYPES).join('|')}", "lugar": "Piscina, Parque… o null", "valores": {"distancia": 550, "duracionMin": 46.93}, "ritmo": "texto del ritmo medio o null", "largos": [{"n": 1, "distancia": 25, "tiempo": "00:52.3", "ritmo": "03'29\\"", "descanso": "00:23.1 o null", "estilo": "Libre"}], "zonasFC": "resumen de las zonas de FC o null", "dispositivo": "Galaxy Watch6 o null", "resumen": "1 frase"}`;
   return sample.json(prompt, { images: files, modelTier: 'default', cache: false, signal });
 }
 

@@ -5,6 +5,7 @@ import { saveDoc, deleteDoc, newId, getState } from '../store.js';
 import { MUSCLES, muscleShort } from '../muscles.js';
 import { lastPerformance, num, fmtNum, fmtDay, isWorkSet, sessionVolume, sessionSetCount, todayKey, fmtSet, isPhaseItem } from '../stats.js';
 import { ExerciseInfo } from './exinfo.js';
+import { WatchPanel } from './watch.js';
 import { Icon, Sheet, ExThumb, Confirm, toast, copyText } from '../ui.js';
 const { html, useState, useEffect, useRef, useMemo } = window.htmPreact;
 
@@ -175,11 +176,27 @@ function ExerciseCard({ item, ex, sessions, date, sessionId, onChange, onRemove,
     const sets = item.sets.map((s, j) => (j === i ? { ...s, [k]: v } : s));
     onChange({ ...item, sets });
   };
+  // Por lado: una serie = izquierda + derecha. Cada lado se anota aparte y la serie toma el menor.
+  const uni = !!item.unilateral;
+  const withSides = (s, lados) => {
+    const vals = ['I', 'D'].map((k) => num(lados[k])).filter((x) => x != null);
+    return { ...s, lados, [mainKey]: vals.length ? String(Math.min(...vals)) : '' };
+  };
+  const setSide = (i, side, v) => {
+    const sets = item.sets.map((s, j) => (j === i ? withSides(s, { ...(s.lados || {}), [side]: v }) : s));
+    onChange({ ...item, sets });
+  };
   const toggleDone = (i) => {
     const s = item.sets[i];
     const done = !s.done;
-    const next = { ...s, done };
-    if (done && !num(s[mainKey]) && repsHint) next[mainKey] = String(repsHint);
+    let next = { ...s, done };
+    if (done && uni && repsHint) {
+      const l = { ...(s.lados || {}) };
+      if (!num(l.I) && !num(s[mainKey])) l.I = String(repsHint);
+      if (!num(l.D) && !num(s[mainKey])) l.D = String(repsHint);
+      if (!s.lados && num(s[mainKey])) { l.I = l.I || s[mainKey]; l.D = l.D || s[mainKey]; }
+      next = withSides(next, l);
+    } else if (done && !num(s[mainKey]) && repsHint) next[mainKey] = String(repsHint);
     if (done && (s.rir === '' || s.rir == null) && rirHint !== '') next.rir = String(rirHint);
     const sets = item.sets.map((x, j) => (j === i ? next : x));
     onChange({ ...item, sets });
@@ -224,12 +241,14 @@ function ExerciseCard({ item, ex, sessions, date, sessionId, onChange, onRemove,
           ${item.status === 'sustituido' && html`<p class="xs muted">En lugar de ${item.replacedFrom?.name}${item.reason ? ` · ${item.reason}` : ''}</p>`}
           ${p?.nota && html`<p class="small plan-note">${p.nota}</p>`}
           <table class="sets">
-            <thead><tr><th>Serie</th><th>${timed ? 'Seg' : 'Reps'}</th>${bw ? null : html`<th>Peso kg</th>`}<th>RIR</th><th><span class="sr">Hecha</span></th></tr></thead>
+            <thead><tr><th>Serie</th><th>${timed ? 'Seg' : 'Reps'}${uni ? html`<span class="side-head"><span>Izq</span><span>Der</span></span>` : null}</th>${bw ? null : html`<th>Peso kg</th>`}<th>RIR</th><th><span class="sr">Hecha</span></th></tr></thead>
             <tbody>
               ${item.sets.map((s, i) => html`
                 <tr class=${s.done ? 'done' : ''}>
                   <td>${i + 1}</td>
-                  <td><input id=${`${item.uid}-r${i}`} inputmode="numeric" aria-label=${`${timed ? 'Segundos' : 'Repeticiones'} serie ${i + 1}`} placeholder=${repsHint} value=${s[mainKey] ?? ''} onInput=${(e) => setField(i, mainKey, e.target.value)} /></td>
+                  ${uni
+                    ? html`<td><div class="sides">${['I', 'D'].map((side) => html`<input id=${`${item.uid}-r${i}${side}`} inputmode="numeric" aria-label=${`${timed ? 'Segundos' : 'Repeticiones'} serie ${i + 1}, lado ${side === 'I' ? 'izquierdo' : 'derecho'}`} placeholder=${repsHint} value=${s.lados?.[side] ?? (s.lados ? '' : s[mainKey] ?? '')} onInput=${(e) => setSide(i, side, e.target.value)} />`)}</div></td>`
+                    : html`<td><input id=${`${item.uid}-r${i}`} inputmode="numeric" aria-label=${`${timed ? 'Segundos' : 'Repeticiones'} serie ${i + 1}`} placeholder=${repsHint} value=${s[mainKey] ?? ''} onInput=${(e) => setField(i, mainKey, e.target.value)} /></td>`}
                   ${bw ? null : html`<td><input id=${`${item.uid}-w${i}`} inputmode="decimal" aria-label=${`Peso serie ${i + 1}`} placeholder=${p?.peso ?? '—'} value=${s.weight} onInput=${(e) => setField(i, 'weight', e.target.value)} /></td>`}
                   <td><input id=${`${item.uid}-i${i}`} inputmode="numeric" aria-label=${`RIR serie ${i + 1}`} placeholder=${rirHint} value=${s.rir} onInput=${(e) => setField(i, 'rir', e.target.value)} /></td>
                   <td><button class="check" aria-pressed=${!!s.done} aria-label=${`Marcar serie ${i + 1} como hecha`} onClick=${() => toggleDone(i)}><${Icon} name="check" /></button></td>
@@ -454,6 +473,7 @@ export function SessionEditor({ session, mode = 'live', onClosed }) {
       </header>
 
       ${draft.lugar === 'freeletics' && html`<${FreeleticsExport} session=${draft} onRename=${(v) => commit({ ...draft, freeleticsName: v })} />`}
+      <${WatchPanel} session=${draft} onSave=${(reloj) => commit({ ...draft, reloj })} />
       ${plan?.razonamiento && html`
         <section class="panel stack-sm">
           <span class="eyebrow">Por qué esta sesión</span>

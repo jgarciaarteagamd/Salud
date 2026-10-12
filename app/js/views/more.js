@@ -5,7 +5,7 @@ import { miSaludSummary } from '../ai.js';
 import { completedSessions, exerciseHistory, fmtShort, fmtNum, todayKey } from '../stats.js';
 import { Icon, Sheet, ExImage, LineChart, Confirm, toast, copyText } from '../ui.js';
 import { ExerciseInfo } from './exinfo.js';
-const { html, useState, useMemo } = window.htmPreact;
+const { html, useState, useMemo, useRef, useEffect } = window.htmPreact;
 
 const EN = {
   pecho: 'chest', deltoide_ant: 'front shoulders', deltoide_lat: 'side shoulders', deltoide_post: 'rear shoulders', triceps: 'triceps', biceps: 'biceps',
@@ -122,13 +122,36 @@ function Catalog() {
 function ProfileLoader() {
   const st = useStore();
   if (!st.loaded.profile) return html`<p class="muted">Cargando perfil…</p>`;
-  return html`<${Profile} key=${st.profile?.updatedAt || 'nuevo'} />`;
+  // Se monta una vez: el perfil se autoguarda y no debe reiniciarse mientras escribes.
+  return html`${st.mode === 'local' && html`<p class="panel small">Esta vista guarda solo en este dispositivo. Abre Fitness Log desde claude.ai para que el perfil se sincronice.</p>`}<${Profile} />`;
 }
 
 function Profile() {
   const st = getState();
   const [p, setP] = useState(() => ({ gimnasio: 'Forus', ...(st.profile || {}) }));
-  const up = (k) => (e) => setP({ ...p, [k]: e.target.value });
+  const [status, setStatus] = useState('');
+  const timer = useRef(null);
+  const latest = useRef(p);
+  // Se guarda solo al dejar de escribir (y con el botón): así no se pierde lo escrito al cambiar de pestaña.
+  async function save(data = latest.current, manual = false) {
+    clearTimeout(timer.current);
+    setStatus('Guardando…');
+    try {
+      await saveProfile(data);
+      setStatus('Guardado');
+      if (manual) toast('Perfil guardado');
+    } catch (e) {
+      setStatus(`No se pudo guardar (${e?.code || 'error'}). Revisa la conexión e intenta de nuevo.`);
+      if (manual) toast('No se pudo guardar el perfil');
+    }
+  }
+  useEffect(() => () => { if (timer.current) { clearTimeout(timer.current); saveProfile(latest.current).catch(() => {}); } }, []);
+  const up = (k) => (e) => {
+    const next = { ...p, [k]: e.target.value };
+    setP(next); latest.current = next; setStatus('Sin guardar');
+    clearTimeout(timer.current);
+    timer.current = setTimeout(() => { timer.current = null; save(next); }, 1200);
+  };
   const F = (k, label, attrs = {}) => html`<label class="field"><span>${label}</span><input id=${'pf-' + k} class="input" value=${p[k] ?? ''} onInput=${up(k)} ...${attrs} /></label>`;
   return html`
     <div class="stack">
@@ -148,7 +171,10 @@ function Profile() {
         <p class="small">Esta app no puede leer la memoria de tu proyecto Mi Salud. Pídele allí: <i>“Resúmeme en un texto mis antecedentes, mis avances de entrenamiento, mis antropometrías y lo que debo cuidar, para pegarlo en Fitness Log”</i>, y pega la respuesta aquí.</p>
         <textarea id="pf-ctx" class="textarea" style="min-height:140px" value=${p.contextoMiSalud ?? ''} onInput=${up('contextoMiSalud')}></textarea>
       </div>
-      <button class="btn btn-primary" onClick=${async () => { await saveProfile(p); toast('Perfil guardado'); }}>Guardar perfil</button>
+      <div class="row">
+        <button class="btn btn-primary" onClick=${() => save(p, true)}>Guardar perfil</button>
+        ${status && html`<span class="small muted" role="status">${status}</span>`}
+      </div>
     </div>`;
 }
 

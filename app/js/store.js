@@ -128,7 +128,7 @@ export function saveProfile(data) {
     state.profile = body; emit();
     return Promise.resolve();
   }
-  return enqueue(PROFILE_PATH, () => db.doc(PROFILE_PATH).set(body));
+  return enqueue(PROFILE_PATH, () => db.collection('profile').doc('main').set(body));
 }
 
 export function newId(prefix = 'x') {

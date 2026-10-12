@@ -26,7 +26,9 @@ export const isWorkSet = (s) => (num(s?.reps) ?? 0) > 0 || (num(s?.secs) ?? 0) >
 export const isPhaseItem = (it) => it?.fase === 'calentamiento' || it?.fase === 'enfriamiento';
 // Movilidad, estiramientos, cardio y lo que se hace al calentar o enfriar no suman series de fuerza al músculo.
 export const countsForVolume = (it) => !['movilidad', 'cardio'].includes(it?.categoria) && !isPhaseItem(it);
-export const fmtSet = (x) => (num(x.secs) ? `${num(x.secs)} s` : `${num(x.reps)}${num(x.weight) ? `×${fmtNum(num(x.weight))}` : ''}`);
+// Por lado con valores distintos: "10/8" (izquierda/derecha).
+const sidesTxt = (x) => { const i = num(x.lados?.I); const d = num(x.lados?.D); return i != null && d != null && i !== d ? `${i}/${d}` : null; };
+export const fmtSet = (x) => (num(x.secs) ? `${sidesTxt(x) ?? num(x.secs)} s` : `${sidesTxt(x) ?? num(x.reps)}${num(x.weight) ? `×${fmtNum(num(x.weight))}` : ''}`);
 export const activeItems = (session) => (session.items || []).filter((it) => it.status !== 'omitido');
 
 export const completedSessions = (sessions) => sessions
