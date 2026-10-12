@@ -329,3 +329,18 @@ input[type="range"] { accent-color: var(--accent); width: 100%; }
 .coach .chips .chip { text-align: left; white-space: normal; padding: 6px 10px; font-size: var(--t-sm); }
 @media (min-width: 860px) { .composer { bottom: 12px; } }
 .mtable.splits input { min-height: 34px; padding: 4px 6px; width: 100%; min-width: 4.5rem; }
+
+/* ---------- micronutrientes ---------- */
+.nbars { display: grid; gap: 2px; padding: 6px 12px; }
+.nbar { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "name val" "track pct"; gap: 3px 10px; align-items: center; padding: 7px 0; background: none; border: 0; border-bottom: 1px solid var(--line); text-align: left; color: inherit; font: inherit; cursor: pointer; }
+.nbar:last-child { border-bottom: 0; }
+.nbar.sel .nb-name { color: var(--accent); }
+.nb-name { grid-area: name; font-weight: 600; font-size: var(--t-sm); }
+.nb-val { grid-area: val; font-size: var(--t-sm); text-align: right; }
+.nb-val small { color: var(--muted); }
+.nb-track { grid-area: track; position: relative; height: 8px; border-radius: 99px; background: var(--surface-2); overflow: hidden; }
+.nb-track i { position: absolute; inset: 0 auto 0 0; border-radius: 99px; background: var(--good); }
+.nb-track b { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--ink); opacity: .35; }
+.nbar.warn .nb-track i { background: var(--warn); }
+.nbar.bad .nb-track i { background: var(--bad); }
+.nb-pct { grid-area: pct; font-size: var(--t-xs); color: var(--muted); min-width: 3.2em; text-align: right; }

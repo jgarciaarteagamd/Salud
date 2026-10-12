@@ -3,7 +3,7 @@
 import { MUSCLES, muscleName, rangesFor } from './muscles.js';
 import {
   MEASURE_FIELDS, NUTRITION_FIELDS, WEEKLY_FIELDS, MEASURE_TYPES, mergeMeasurementsByDate, SOURCE_SHORT,
-  ACTIVITY_TYPES, ACTIVITY_FIELDS, isWeekly, paceLabel,
+  ACTIVITY_TYPES, ACTIVITY_FIELDS, isWeekly, paceLabel, MICRO_FIELDS, LIMIT_FIELDS, NUTRITION_FIELD, metaOf,
 } from './fields.js';
 import {
   completedSessions, setsByMuscle, todayKey, dateKey, addDays, lastTrained, lastPerformance,
@@ -84,8 +84,42 @@ function nutritionBlock(nutrition) {
   const week = weeklyBlock(nutrition, 1);
   if (!recent.length) return 'Sin registros diarios de nutrición en los últimos 7 días.' + (week ? `\n${week}` : '');
   const avg = (k) => { const v = recent.map((n) => num(n.valores?.[k])).filter((x) => x != null); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
-  return NUTRITION_FIELDS.map((f) => { const a = avg(f.key); return a == null ? null : `${f.label} promedio ${fmtNum(a, 0)} ${f.unit}`; }).filter(Boolean).join(', ')
-    + ` (${recent.length} de 7 días registrados; los días sin registro no son ayuno, solo no se anotaron)` + (week ? `\n${week}` : '');
+  const macroKeys = ['kcal', 'proteina', 'carbohidratos', 'grasa', 'fibra', 'agua', 'kcalObjetivo', 'proteinaObjetivo'];
+  const macros = macroKeys.map((k) => { const f = NUTRITION_FIELD[k]; const a = avg(k); return a == null ? null : `${f.label} promedio ${fmtNum(a, 0)} ${f.unit}`; }).filter(Boolean).join(', ');
+  const micro = microSummary(recent);
+  return macros + ` (${recent.length} de 7 días registrados; los días sin registro no son ayuno, solo no se anotaron)`
+    + (micro ? `\n${micro}` : '') + (week ? `\n${week}` : '');
+}
+
+// Promedio de cada vitamina, mineral y nutriente a limitar frente a su meta (o máximo) de Fitia.
+export function microStats(days) {
+  const rows = days.filter((n) => !isWeekly(n));
+  const stat = (f, limit) => {
+    const vals = rows.filter((n) => num(n.valores?.[f.key]) != null);
+    if (!vals.length) return null;
+    const pct = vals.map((n) => num(n.valores[f.key]) / (metaOf(n, f.key) || 1));
+    const avg = vals.reduce((a, n) => a + num(n.valores[f.key]), 0) / vals.length;
+    const avgPct = pct.reduce((a, b) => a + b, 0) / pct.length;
+    const off = limit ? pct.filter((p) => p > 1).length : pct.filter((p) => p < 0.7).length;
+    return { key: f.key, label: f.label, unit: f.unit, avg, meta: metaOf(vals[vals.length - 1], f.key), pct: avgPct, off, n: vals.length, limit };
+  };
+  return {
+    micro: [NUTRITION_FIELD.fibra, ...MICRO_FIELDS].map((f) => stat(f, false)).filter(Boolean),
+    limit: LIMIT_FIELDS.map((f) => stat(f, true)).filter(Boolean),
+  };
+}
+
+function microSummary(days) {
+  const { micro, limit } = microStats(days);
+  if (!micro.length && !limit.length) return '';
+  const fmt = (x) => `${x.label} ${fmtNum(x.avg, x.avg < 10 ? 1 : 0)} ${x.unit} (${fmtNum(x.pct * 100, 0)} % de ${x.limit ? 'su máximo' : 'la meta'}; ${x.off} de ${x.n} días ${x.limit ? 'por encima' : 'bajo el 70 %'})`;
+  const low = micro.filter((x) => x.pct < 0.9).sort((a, b) => a.pct - b.pct);
+  const ok = micro.filter((x) => x.pct >= 0.9);
+  return [
+    low.length ? `Vitaminas, minerales y fibra por debajo de la meta: ${low.map(fmt).join('; ')}` : '',
+    ok.length ? `Cubiertos (≥90 %): ${ok.map((x) => `${x.label} ${fmtNum(x.pct * 100, 0)} %`).join(', ')}` : '',
+    limit.length ? `A limitar: ${limit.map(fmt).join('; ')}` : '',
+  ].filter(Boolean).join('\n');
 }
 
 function weeklyBlock(nutrition, limit = 4) {
@@ -102,8 +136,12 @@ function nutritionDays(nutrition, days = 45) {
   const rows = nutrition.filter((n) => !isWeekly(n) && n.date >= since).sort((a, b) => (a.date < b.date ? -1 : 1));
   if (!rows.length) return 'Sin registros diarios.';
   const v = (n, k) => (n.valores?.[k] == null ? '-' : n.valores[k]);
-  return 'fecha | kcal/meta | proteína/meta g | carbos/meta g | grasa/meta g | fibra g | grasa sat g | azúcar g | sal g\n'
-    + rows.map((n) => `${n.date} | ${v(n, 'kcal')}/${v(n, 'kcalObjetivo')} | ${v(n, 'proteina')}/${v(n, 'proteinaObjetivo')} | ${v(n, 'carbohidratos')}/${v(n, 'carbObjetivo')} | ${v(n, 'grasa')}/${v(n, 'grasaObjetivo')} | ${v(n, 'fibra')} | ${v(n, 'grasaSat')} | ${v(n, 'azucar')} | ${v(n, 'sal')}${n.valores?.alcohol ? ` | alcohol ${n.valores.alcohol} g` : ''}${n.notas && !n.notas.startsWith('Importado') ? ` | nota: ${n.notas}` : ''}`).join('\n');
+  const micros = (n) => MICRO_FIELDS.filter((f) => n.valores?.[f.key] != null).map((f) => `${f.key} ${n.valores[f.key]}`).join(' ');
+  const metas = MICRO_FIELDS.map((f) => `${f.key} ${f.meta} ${f.unit}`).join(', ');
+  return `Metas diarias de referencia de Fitia: ${metas}. Fibra 38 g. Máximos: grasa sat ~10 % de las kcal, azúcar añadido 25 g, sal ~5 g.\n`
+    + 'fecha | kcal/meta | proteína/meta g | carbos/meta g | grasa/meta g | fibra g | grasa sat g | azúcar añadido g | sal g | calidad Fitia | vitaminas y minerales\n'
+    + rows.map((n) => `${n.date} | ${v(n, 'kcal')}/${v(n, 'kcalObjetivo')} | ${v(n, 'proteina')}/${v(n, 'proteinaObjetivo')} | ${v(n, 'carbohidratos')}/${v(n, 'carbObjetivo')} | ${v(n, 'grasa')}/${v(n, 'grasaObjetivo')} | ${v(n, 'fibra')} | ${v(n, 'grasaSat')} | ${v(n, 'azucar')} | ${v(n, 'sal')} | ${n.calidad || '-'} | ${micros(n) || '-'}${n.valores?.alcohol ? ` | alcohol ${n.valores.alcohol} g` : ''}${n.notas && !n.notas.startsWith('Importado') ? ` | nota: ${n.notas}` : ''}`).join('\n')
+    + `\n\nRESUMEN DE MICRONUTRIENTES (${rows.length} días)\n${microSummary(rows)}`;
 }
 
 export function activityLine(a) {
@@ -229,11 +267,12 @@ export async function extractNutrition(files, { signal, weekly } = {}) {
   const prompt = `Estas imágenes son capturas de la app de nutrición Fitia: un resumen diario o el resumen semanal ("Score nutricional").
 Extrae los totales consumidos y, si aparecen, las metas. Claves:
 ${keys}
+Copia también vitaminas y minerales si aparecen. En "metas" pon la meta de cada nutriente que muestre la captura (el número después de la barra, p. ej. "854/900 mcg" → valor 854 y meta 900) y, para los nutrientes a limitar, el máximo ("Máx 23 g" → 23). Usa las mismas claves. En "calidad" copia la calidad de alimentos (Muy bajo, Bajo, Regular, Bueno o Excelente). "azucar" es el azúcar añadido.
 Si es el resumen semanal: marca "periodo": "semana", pon en "fecha" el primer día y en "fechaFin" el último día de la semana, usa el promedio diario de la semana en las claves anteriores y agrega estas claves si aparecen:
 ${wkeys}
 En "fortalezas" y "mejoras" copia en frases cortas lo que la app destaca como bien y por mejorar.${weekly ? '\nEl usuario indicó que es el resumen semanal.' : ''}
 Usa el año ${new Date().getFullYear()} si la captura no lo muestra. No inventes valores que no se vean.
-Responde SOLO con JSON: {"fecha": "AAAA-MM-DD o null", "fechaFin": "AAAA-MM-DD o null", "periodo": "dia|semana", "valores": {"kcal": 2100, "proteina": 150}, "fortalezas": ["..."], "mejoras": ["..."], "resumen": "1 frase"}`;
+Responde SOLO con JSON: {"fecha": "AAAA-MM-DD o null", "fechaFin": "AAAA-MM-DD o null", "periodo": "dia|semana", "valores": {"kcal": 2100, "proteina": 150, "vitD": 10}, "metas": {"fibra": 38, "vitD": 15, "grasaSat": 23}, "calidad": "Regular o null", "fortalezas": ["..."], "mejoras": ["..."], "resumen": "1 frase"}`;
   return sample.json(prompt, { images: files, modelTier: 'default', cache: false, signal });
 }
 
@@ -357,6 +396,7 @@ Cómo respondes:
 - Su objetivo es la recomposición corporal (ganar músculo sin subir de peso). Es principiante y entrena unas 2 veces por semana 1 hora en Forus, más Freeletics en casa y algo de cardio como natación.
 - Cuida su rodilla derecha y su espalda en cada recomendación.
 - Los días sin registro en Fitia significan que no se anotó, no que no comió.
+- Para vitaminas y minerales mira la tendencia de varios días, no un día suelto. Prioriza comida real (qué alimentos concretos los aportan) antes que suplementos; si un déficit es persistente (por ejemplo vitamina D), sugiere comentarlo con su médico para valorar análisis o suplemento.
 - Distingue lo que muestran los datos de lo que supones. Si falta un dato, dilo y sugiere cómo registrarlo en la app.
 - No diagnostiques. Ante dolor fuerte, que no cede o con síntomas nuevos, recomienda consultar a su médico o fisioterapeuta.
 - Formato: párrafos cortos y listas con "- ". Usa **negrita** solo para lo clave. Sin tablas ni encabezados grandes.

@@ -3,9 +3,10 @@
 import { useStore, saveDoc, deleteDoc, newId, uploadImage, canUpload, assetUrl } from '../store.js';
 import {
   MEASURE_GROUPS, MEASURE_FIELDS, MEASURE_TYPES, NUTRITION_FIELDS, NUTRITION_GROUPS, WEEKLY_GROUPS, WEEKLY_FIELDS, isWeekly,
+  NUTRITION_FIELD, FOOD_QUALITY, metaOf,
   mergeMeasurementsByDate, SOURCE_SHORT,
 } from '../fields.js';
-import { extractMeasurements, extractNutrition, imageLimits, errorCopy } from '../ai.js';
+import { extractMeasurements, extractNutrition, imageLimits, errorCopy, microStats } from '../ai.js';
 import { todayKey, fmtShort, fmtDay, fmtNum, num, addDays, dateKey, daysBetween } from '../stats.js';
 import { Icon, Sheet, LineChart, Thinking, Confirm, toast } from '../ui.js';
 const { html, useState, useEffect, useMemo, useRef } = window.htmPreact;
@@ -17,6 +18,8 @@ function EntrySheet({ kind, entry, weekly, onClose }) {
   const [date, setDate] = useState(entry?.date || (weekly ? dateKey(addDays(new Date(), -6)) : todayKey()));
   const [dateEnd, setDateEnd] = useState(entry?.dateEnd || (weekly ? todayKey() : ''));
   const [notes2, setNotes2] = useState({ fortalezas: entry?.fortalezas || [], mejoras: entry?.mejoras || [] });
+  const [metas, setMetas] = useState(entry?.metas || {});
+  const [calidad, setCalidad] = useState(entry?.calidad || '');
   const [tipo, setTipo] = useState(entry?.tipo || 'bioimpedancia');
   const [vals, setVals] = useState(() => Object.fromEntries(Object.entries(entry?.valores || {}).map(([k, v]) => [k, String(v)])));
   const [notas, setNotas] = useState(entry?.notas || '');
@@ -52,6 +55,12 @@ function EntrySheet({ kind, entry, weekly, onClose }) {
       if (r?.fecha && /^\d{4}-\d{2}-\d{2}$/.test(r.fecha)) setDate(r.fecha);
       if (!isNut && r?.tipo && MEASURE_TYPES[r.tipo]) setTipo(r.tipo);
       if (Array.isArray(r?.otros)) setOtros(r.otros.filter((o) => o?.nombre));
+      if (isNut && r?.metas && typeof r.metas === 'object') {
+        const m = { ...metas };
+        for (const [k, v] of Object.entries(r.metas)) if (NUTRITION_FIELD[k] && num(v) != null) m[k] = num(v);
+        setMetas(m);
+      }
+      if (isNut && FOOD_QUALITY.includes(r?.calidad)) setCalidad(r.calidad);
       setSummary(r?.resumen || '');
       toast('Valores leídos: revísalos antes de guardar');
     } catch (e) { setErr(errorCopy(e)); } finally { setBusy(''); }
@@ -69,6 +78,7 @@ function EntrySheet({ kind, entry, weekly, onClose }) {
       if (!isNut) { doc.tipo = tipo; doc.otros = otros; }
       if (isNut) {
         doc.periodo = periodo; doc.fuente = entry?.fuente || 'fitia';
+        doc.metas = metas; doc.calidad = calidad || null;
         if (isWeek) { doc.dateEnd = dateEnd || null; doc.fortalezas = notes2.fortalezas; doc.mejoras = notes2.mejoras; }
       }
       await saveDoc(isNut ? 'nutrition' : 'measurements', entry?.id || newId(isNut ? 'n' : 'm'), doc);
@@ -106,12 +116,13 @@ function EntrySheet({ kind, entry, weekly, onClose }) {
       ${visibleGroups.map((g) => html`
         <div class="stack-sm">
           <span class="eyebrow">${g.title}</span>
-          <div class="form-grid">${g.fields.map((f) => html`
-            <label class="field"><span>${f.label}${f.unit ? ` (${f.unit})` : ''}</span>
-              <input id=${'v-' + f.key} class="input num" inputmode="decimal" value=${vals[f.key] ?? ''} onInput=${(e) => setVals({ ...vals, [f.key]: e.target.value })} /></label>`)}
+          <div class="form-grid">${g.fields.map((f) => { const m = isNut && f.meta ? (num(metas[f.key]) || f.meta) : null; return html`
+            <label class="field"><span>${f.label}${f.unit ? ` (${f.unit}${m ? `${g.limit ? ' · máx ' : ' · meta '}${fmtNum(m, 2)}` : ''})` : ''}</span>
+              <input id=${'v-' + f.key} class="input num" inputmode="decimal" value=${vals[f.key] ?? ''} onInput=${(e) => setVals({ ...vals, [f.key]: e.target.value })} /></label>`; })}
           </div>
         </div>`)}
-      ${!isWeek && html`<button class="btn btn-ghost btn-sm" style="align-self:flex-start" onClick=${() => setShowAll(!showAll)}>${showAll ? 'Mostrar solo los llenos' : isNut ? 'Mostrar detalle (saturadas, azúcar, sal, sodio, alcohol)' : 'Mostrar todos los campos (perímetros, pliegues, somatotipo)'}</button>`}
+      ${isNut && html`<label class="field"><span>Calidad de alimentos (Fitia)</span><select id="en-quality" class="select" value=${calidad} onChange=${(e) => setCalidad(e.target.value)}><option value="">Sin dato</option>${FOOD_QUALITY.map((q) => html`<option value=${q}>${q}</option>`)}</select></label>`}
+      ${!isWeek && html`<button class="btn btn-ghost btn-sm" style="align-self:flex-start" onClick=${() => setShowAll(!showAll)}>${showAll ? 'Mostrar solo los llenos' : isNut ? 'Mostrar vitaminas, minerales y nutrientes a limitar' : 'Mostrar todos los campos (perímetros, pliegues, somatotipo)'}</button>`}
       ${isWeek && (notes2.fortalezas.length || notes2.mejoras.length) ? html`<div class="stack-sm">
         ${notes2.fortalezas.length ? html`<span class="eyebrow">Lo que hiciste bien</span><ul class="small" style="margin:0;padding-left:18px">${notes2.fortalezas.map((t) => html`<li>${t}</li>`)}</ul>` : null}
         ${notes2.mejoras.length ? html`<span class="eyebrow">Por mejorar</span><ul class="small" style="margin:0;padding-left:18px">${notes2.mejoras.map((t) => html`<li>${t}</li>`)}</ul>` : null}
@@ -160,6 +171,46 @@ function Measures({ list, open }) {
     </div>`;
 }
 
+const OBJ_KEY = { kcal: 'kcalObjetivo', proteina: 'proteinaObjetivo', carbohidratos: 'carbObjetivo', grasa: 'grasaObjetivo' };
+const levelOf = (x) => (x.limit ? (x.pct > 1.2 ? 'bad' : x.pct > 1 ? 'warn' : 'good') : (x.pct < 0.5 ? 'bad' : x.pct < 0.9 ? 'warn' : 'good'));
+
+// Vitaminas, minerales, fibra y nutrientes a limitar: promedio del periodo frente a la meta de Fitia.
+function MicroPanel({ days }) {
+  const [range, setRange] = useState(30);
+  const [metric, setMetric] = useState(null);
+  const [all, setAll] = useState(false);
+  const since = range ? dateKey(addDays(new Date(), -(range - 1))) : '';
+  const rows = days.filter((n) => n.date >= since);
+  const { micro, limit } = useMemo(() => microStats(rows), [days, range]);
+  if (!micro.length && !limit.length) return null;
+  const low = [...micro].sort((a, b) => a.pct - b.pct);
+  const worst = low.filter((x) => x.pct < 0.7).slice(0, 4);
+  const pickKey = metric || low[0]?.key;
+  const f = NUTRITION_FIELD[pickKey];
+  const chartRows = days.slice(-30);
+  const series = [{ name: f?.label, points: chartRows.map((n) => ({ x: fmtShort(n.date), y: num(n.valores?.[pickKey]) })) }];
+  const metaPts = chartRows.map((n) => ({ x: fmtShort(n.date), y: OBJ_KEY[pickKey] ? num(n.valores?.[OBJ_KEY[pickKey]]) : metaOf(n, pickKey) }));
+  if (metaPts.some((p) => p.y != null)) series.push({ name: 'Meta', points: metaPts });
+  const bar = (x) => html`
+    <button class=${'nbar ' + levelOf(x) + (x.key === pickKey ? ' sel' : '')} onClick=${() => setMetric(x.key)} aria-label=${`${x.label}: ver evolución`}>
+      <span class="nb-name">${x.label}</span>
+      <span class="nb-val num">${fmtNum(x.avg, x.avg < 10 ? 1 : 0)}<small> / ${fmtNum(x.meta, x.meta < 10 ? 1 : 0)} ${x.unit}</small></span>
+      <span class="nb-track"><i style=${`width:${Math.min(100, (x.pct / 1.5) * 100)}%`}></i><b style="left:66.7%"></b></span>
+      <span class="nb-pct num">${fmtNum(x.pct * 100, 0)} %</span>
+    </button>`;
+  return html`
+    <section class="section stack-sm">
+      <div class="row-between"><span class="eyebrow">Vitaminas, minerales y fibra</span>
+        <div class="seg" role="group" aria-label="Periodo">${[[7, '7 días'], [30, '30 días'], [0, 'Todo']].map(([v, l]) => html`<button aria-pressed=${range === v} onClick=${() => setRange(v)}>${l}</button>`)}</div></div>
+      <p class="small muted">Promedio de ${rows.length} ${rows.length === 1 ? 'día registrado' : 'días registrados'} frente a la meta diaria de Fitia. La línea marca el 100 %.${worst.length ? html` Más bajos: <b>${worst.map((x) => x.label.replace(/ \(.*\)/, '')).join(', ')}</b>.` : ''}</p>
+      <div class="card nbars">${low.filter((x) => all || x.pct < 0.9).map(bar)}
+        ${low.some((x) => x.pct >= 0.9) && html`<button class="btn btn-ghost btn-sm" style="justify-self:start" onClick=${() => setAll(!all)}>${all ? 'Ocultar los cubiertos' : `Ver los ${low.filter((x) => x.pct >= 0.9).length} que ya cubres (≥ 90 %)`}</button>`}</div>
+      ${limit.length ? html`<span class="eyebrow">A limitar · promedio frente al máximo</span><div class="card nbars">${limit.map(bar)}</div>` : null}
+      <div class="card stack-sm"><span class="eyebrow">${f?.label} · ${f?.unit} · últimos registros</span><${LineChart} series=${series} />
+        <p class="xs muted">Toca cualquier nutriente para ver su evolución.</p></div>
+    </section>`;
+}
+
 function Nutrition({ list, open }) {
   const days = list.filter((n) => !isWeekly(n));
   const weeks = list.filter(isWeekly).sort((a, b) => (a.date < b.date ? 1 : -1));
@@ -181,6 +232,7 @@ function Nutrition({ list, open }) {
         <div class="card stack-sm"><span class="eyebrow">Calorías · consumidas y meta</span><${LineChart} series=${[{ name: 'kcal', points: pts('kcal') }, ...(has('kcalObjetivo') ? [{ name: 'Meta', points: pts('kcalObjetivo') }] : [])]} /></div>
         <div class="card stack-sm"><span class="eyebrow">Proteína · g, con meta</span><${LineChart} series=${[{ name: 'Proteína', points: pts('proteina') }, ...(has('proteinaObjetivo') ? [{ name: 'Meta', points: pts('proteinaObjetivo') }] : [])]} /></div>
       </div>
+      <${MicroPanel} days=${sorted} />
 
       <section class="section">
         <div class="row-between"><span class="eyebrow">Score nutricional semanal</span>
@@ -202,7 +254,7 @@ function Nutrition({ list, open }) {
               ${gap > 0 ? html`<div class="xs muted" style="padding:6px 0">${gap === 1 ? '1 día' : `${gap} días`} sin registro</div>` : null}
               <button class="mrow" style="grid-template-columns:4.2rem 1fr auto" onClick=${() => open({ entry: n })}>
                 <span class="name">${fmtShort(n.date)}</span>
-                <span class="small muted num">P ${fmtNum(n.valores?.proteina, 0)} · C ${fmtNum(n.valores?.carbohidratos, 0)} · G ${fmtNum(n.valores?.grasa, 0)}</span>
+                <span class="small muted num">P ${fmtNum(n.valores?.proteina, 0)} · C ${fmtNum(n.valores?.carbohidratos, 0)} · G ${fmtNum(n.valores?.grasa, 0)}${n.calidad ? html`<br /><span class="xs">Calidad ${n.calidad.toLowerCase()}</span>` : null}</span>
                 <span class="val" style=${k != null && o ? `color:${k > o * 1.1 ? 'var(--warn)' : 'inherit'}` : ''}>${fmtNum(k, 0)}${o ? html`<small class="muted">/${fmtNum(o, 0)}</small>` : null}</span>
               </button>`;
           })}

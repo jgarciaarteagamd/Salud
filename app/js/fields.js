@@ -68,6 +68,8 @@ export const MEASURE_GROUPS = [
 export const MEASURE_FIELDS = MEASURE_GROUPS.flatMap((g) => g.fields);
 export const MEASURE_FIELD = Object.fromEntries(MEASURE_FIELDS.map((f) => [f.key, f]));
 
+// `meta`: valor de referencia diario que usa Fitia (se reemplaza por el de la captura si viene en `metas`).
+// En "a limitar" la meta es un máximo.
 export const NUTRITION_GROUPS = [
   {
     title: 'Del día',
@@ -76,7 +78,7 @@ export const NUTRITION_GROUPS = [
       { key: 'proteina', label: 'Proteína', unit: 'g' },
       { key: 'carbohidratos', label: 'Carbohidratos', unit: 'g' },
       { key: 'grasa', label: 'Grasa', unit: 'g' },
-      { key: 'fibra', label: 'Fibra', unit: 'g' },
+      { key: 'fibra', label: 'Fibra', unit: 'g', meta: 38 },
       { key: 'agua', label: 'Agua', unit: 'L' },
     ],
   },
@@ -90,18 +92,58 @@ export const NUTRITION_GROUPS = [
     ],
   },
   {
-    title: 'Detalle',
+    title: 'Nutrientes a limitar',
+    limit: true,
     fields: [
-      { key: 'grasaSat', label: 'Grasa saturada', unit: 'g' },
-      { key: 'grasaTrans', label: 'Grasa trans', unit: 'g' },
-      { key: 'azucar', label: 'Azúcar', unit: 'g' },
-      { key: 'sal', label: 'Sal', unit: 'g' },
-      { key: 'sodio', label: 'Sodio', unit: 'mg' },
+      { key: 'grasaSat', label: 'Grasa saturada', unit: 'g', meta: 22 },
+      { key: 'grasaTrans', label: 'Grasa trans', unit: 'g', meta: 2.2 },
+      { key: 'azucar', label: 'Azúcar añadido', unit: 'g', meta: 25 },
+      { key: 'sal', label: 'Sal', unit: 'g', meta: 5.5 },
+      { key: 'sodio', label: 'Sodio', unit: 'mg', meta: 2200 },
       { key: 'alcohol', label: 'Alcohol', unit: 'g' },
+    ],
+  },
+  {
+    title: 'Vitaminas',
+    micro: true,
+    fields: [
+      { key: 'vitA', label: 'Vitamina A', unit: 'mcg', meta: 900 },
+      { key: 'vitC', label: 'Vitamina C', unit: 'mg', meta: 90 },
+      { key: 'vitD', label: 'Vitamina D', unit: 'mcg', meta: 15 },
+      { key: 'vitE', label: 'Vitamina E', unit: 'mg', meta: 15 },
+      { key: 'vitK', label: 'Vitamina K', unit: 'mcg', meta: 120 },
+      { key: 'vitB1', label: 'Vitamina B1 (tiamina)', unit: 'mg', meta: 1.2 },
+      { key: 'vitB2', label: 'Vitamina B2 (riboflavina)', unit: 'mg', meta: 1.3 },
+      { key: 'vitB3', label: 'Vitamina B3 (niacina)', unit: 'mg', meta: 16 },
+      { key: 'vitB5', label: 'Vitamina B5', unit: 'mg', meta: 5 },
+      { key: 'vitB6', label: 'Vitamina B6', unit: 'mg', meta: 1.3 },
+      { key: 'vitB12', label: 'Vitamina B12', unit: 'mcg', meta: 2.4 },
+      { key: 'folato', label: 'Folato', unit: 'mcg', meta: 400 },
+    ],
+  },
+  {
+    title: 'Minerales',
+    micro: true,
+    fields: [
+      { key: 'calcio', label: 'Calcio', unit: 'mg', meta: 1000 },
+      { key: 'hierro', label: 'Hierro', unit: 'mg', meta: 8 },
+      { key: 'magnesio', label: 'Magnesio', unit: 'mg', meta: 420 },
+      { key: 'fosforo', label: 'Fósforo', unit: 'mg', meta: 700 },
+      { key: 'potasio', label: 'Potasio', unit: 'mg', meta: 3500 },
+      { key: 'zinc', label: 'Zinc', unit: 'mg', meta: 11 },
+      { key: 'selenio', label: 'Selenio', unit: 'mcg', meta: 55 },
+      { key: 'cobre', label: 'Cobre', unit: 'mcg', meta: 900 },
+      { key: 'manganeso', label: 'Manganeso', unit: 'mg', meta: 2.3 },
     ],
   },
 ];
 export const NUTRITION_FIELDS = NUTRITION_GROUPS.flatMap((g) => g.fields);
+export const NUTRITION_FIELD = Object.fromEntries(NUTRITION_FIELDS.map((f) => [f.key, f]));
+export const MICRO_FIELDS = NUTRITION_GROUPS.filter((g) => g.micro).flatMap((g) => g.fields);
+export const LIMIT_FIELDS = NUTRITION_GROUPS.find((g) => g.limit).fields.filter((f) => f.meta);
+export const FOOD_QUALITY = ['Muy bajo', 'Bajo', 'Regular', 'Bueno', 'Excelente'];
+// Meta (o máximo) de un nutriente para un registro: la de la captura o la de referencia.
+export const metaOf = (entry, key) => Number(entry?.metas?.[key]) || NUTRITION_FIELD[key]?.meta || null;
 
 // Resumen semanal de Fitia ("Score nutricional"): puntaje y promedios diarios de la semana.
 export const WEEKLY_GROUPS = [
@@ -114,6 +156,7 @@ export const WEEKLY_GROUPS = [
     ],
   },
   { title: 'Promedio diario de la semana', fields: NUTRITION_GROUPS[0].fields.filter((f) => f.key !== 'agua').concat(NUTRITION_GROUPS[1].fields.slice(0, 2)) },
+  ...NUTRITION_GROUPS.slice(2),
 ];
 export const WEEKLY_FIELDS = WEEKLY_GROUPS.flatMap((g) => g.fields);
 export const isWeekly = (n) => n?.periodo === 'semana';
