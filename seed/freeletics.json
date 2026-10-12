@@ -25,6 +25,31 @@
   "view": "Side view"
  },
  {
+  "name": "Incline Pushups",
+  "nombreEs": "Flexiones inclinadas (manos en caja)",
+  "grupo": "Empuje",
+  "primary": [
+   "pecho"
+  ],
+  "secondary": [
+   "triceps",
+   "deltoide_ant",
+   "abdomen"
+  ],
+  "medida": "reps",
+  "unilateral": false,
+  "knee": "ok",
+  "back": "ok",
+  "cues": "Manos en una caja o banco firme: cuanto más alto, más fácil. Cuerpo recto de cabeza a talones.",
+  "equipment": "Caja o banco",
+  "modalidad": "freeletics",
+  "categoria": "fuerza",
+  "prompt": "incline push-up with both hands on a sturdy wooden plyo box, body in a straight line from head to heels, feet on the floor, elbows bent lowering the chest toward the box edge",
+  "highlight": "chest, triceps, front shoulders",
+  "view": "Side view",
+  "id": "fl-incline-pushups"
+ },
+ {
   "id": "fl-negative-pushups",
   "name": "Negative Pushups",
   "nombreEs": "Flexiones negativas",
@@ -50,7 +75,7 @@
  },
  {
   "id": "fl-pike",
-  "name": "Pike Pushups",
+  "name": "Pikes",
   "nombreEs": "Flexiones en pica",
   "grupo": "Empuje",
   "primary": [
@@ -74,7 +99,7 @@
  },
  {
   "id": "fl-dead-bug",
-  "name": "Dead Bug",
+  "name": "Dead Bugs",
   "nombreEs": "Dead bug",
   "grupo": "Core antiextensión",
   "primary": [
@@ -82,7 +107,7 @@
   ],
   "secondary": [],
   "medida": "reps",
-  "unilateral": true,
+  "unilateral": false,
   "knee": "ok",
   "back": "ok",
   "cues": "Lumbar pegada al suelo durante todo el movimiento.",
@@ -716,9 +741,32 @@
   "view": "Front view"
  },
  {
+  "id": "fl-shoulder-stretch",
+  "name": "Shoulder Stretch",
+  "nombreEs": "Estiramiento de hombro (brazo cruzado)",
+  "grupo": "Movilidad y estiramientos",
+  "primary": [
+   "deltoide_post"
+  ],
+  "secondary": [
+   "espalda_media"
+  ],
+  "medida": "tiempo",
+  "unilateral": true,
+  "knee": "ok",
+  "back": "ok",
+  "cues": "",
+  "equipment": "Peso corporal",
+  "modalidad": "freeletics",
+  "categoria": "movilidad",
+  "prompt": "standing cross-body shoulder stretch, one straight arm pulled horizontally across the chest by the opposite forearm",
+  "highlight": "rear shoulder and upper back",
+  "view": "Front three-quarter view"
+ },
+ {
   "id": "fl-shoulder-triceps-stretch",
-  "name": "Shoulder & Triceps Stretch",
-  "nombreEs": "Estiramiento de hombro y tríceps",
+  "name": "Triceps Stretch",
+  "nombreEs": "Estiramiento de tríceps",
   "grupo": "Movilidad y estiramientos",
   "primary": [
    "triceps"
@@ -897,7 +945,7 @@
    "aductores"
   ],
   "secondary": [],
-  "medida": "reps",
+  "medida": "tiempo",
   "unilateral": true,
   "knee": "precaucion",
   "back": "ok",

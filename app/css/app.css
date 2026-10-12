@@ -344,3 +344,8 @@ input[type="range"] { accent-color: var(--accent); width: 100%; }
 .nbar.warn .nb-track i { background: var(--warn); }
 .nbar.bad .nb-track i { background: var(--bad); }
 .nb-pct { grid-area: pct; font-size: var(--t-xs); color: var(--muted); min-width: 3.2em; text-align: right; }
+
+/* ---------- lista para Freeletics ---------- */
+.fl-list { margin: 0; padding: 8px 12px 8px 34px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-sm); display: grid; gap: 2px; font-size: var(--t-sm); max-height: 50vh; overflow: auto; }
+.fl-list li { padding: 3px 0; font-weight: 600; }
+.fl-list li.pausa { font-weight: 400; color: var(--muted); }

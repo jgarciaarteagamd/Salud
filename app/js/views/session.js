@@ -23,7 +23,13 @@ export function makeItem(ex, { origin = 'plan', planned = null, sessions = [], d
   const nSets = planned?.series || lp?.sets.length || (fase ? 1 : 3);
   const w = planned?.peso ?? lp?.sets?.[0]?.weight ?? '';
   // Si la meta viene en segundos (p. ej. 5 min de elíptica), la tabla registra segundos.
-  const medida = planned?.segundos && !planned?.reps ? 'tiempo' : ex.medida || 'reps';
+  // Freeletics fija la medida de cada ejercicio (reps o tiempo): manda el catálogo.
+  const fl = ex.modalidad === 'freeletics';
+  const medida = fl ? ex.medida || 'reps' : planned?.segundos && !planned?.reps ? 'tiempo' : ex.medida || 'reps';
+  if (fl && planned) {
+    if (medida === 'reps' && !planned.reps) planned = { ...planned, reps: '10', segundos: null };
+    if (medida === 'tiempo' && !planned.segundos) planned = { ...planned, segundos: 30, reps: '' };
+  }
   return {
     uid: newId('it'), exerciseId: ex.id, name: ex.name,
     primary: ex.primary || [], secondary: ex.secondary || [],
@@ -252,42 +258,69 @@ function RestTimer({ until, onDone }) {
 }
 
 /* ---------- llevar la sesión a "Crear workout" de Freeletics ---------- */
-export function freeleticsRounds(session) {
-  const items = (session.items || []).filter((i) => i.status !== 'omitido');
-  // Sesiones antiguas sin fases: la movilidad del bloque se lleva al calentamiento.
-  const mob = items.filter((i) => i.fase === 'calentamiento' || (!i.fase && i.categoria === 'movilidad'));
-  const cool = items.filter((i) => i.fase === 'enfriamiento');
-  const work = items.filter((i) => !mob.includes(i) && !cool.includes(i));
-  const amount = (it) => {
+// Misma forma que un workout guardado en Freeletics: cada serie (y cada lado) es una entrada,
+// con su pausa: 10 s entre series y lados, 30 s entre ejercicios.
+export const FL_SIDE_PAUSE = 10;
+export const FL_EXERCISE_PAUSE = 30;
+const PHASE_ORDER = { calentamiento: 0, enfriamiento: 2 };
+export function freeleticsList(session) {
+  const items = (session.items || []).filter((i) => i.status !== 'omitido')
+    .map((it, i) => ({ it, i, o: PHASE_ORDER[it.fase] ?? 1 }))
+    .sort((a, b) => a.o - b.o || a.i - b.i).map((x) => x.it);
+  const out = [];
+  items.forEach((it, k) => {
     const p = it.planned || {};
-    const v = it.medida === 'tiempo' ? `${p.segundos || it.sets?.[0]?.secs || 30} s` : `${p.reps || it.sets?.[0]?.reps || 10} reps`;
-    return `${v}${it.unilateral ? ' por lado' : ''}`;
-  };
-  const n = Math.max(1, ...work.map((i) => i.planned?.series || i.sets?.length || 1));
-  const rounds = Array.from({ length: n }, (_, r) => work.filter((i) => (i.planned?.series || i.sets?.length || 1) > r)
-    .map((i) => ({ name: i.name, amount: amount(i), pausa: i.planned?.descansoSeg || 30 })));
-  const simple = (list) => list.map((i) => ({ name: i.name, amount: amount(i) }));
-  return { mob: simple(mob), rounds, cool: simple(cool) };
+    const timed = it.medida === 'tiempo';
+    const amount = timed ? `${num(p.segundos) || num(it.sets?.[0]?.secs) || 30}s` : `${parseInt(p.reps, 10) || num(it.sets?.[0]?.reps) || 10}x`;
+    const series = Math.max(1, it.sets?.length || p.series || 1);
+    const between = Math.max(FL_SIDE_PAUSE, num(p.descansoSeg) || FL_SIDE_PAUSE);
+    for (let s = 0; s < series; s++) {
+      const sides = it.unilateral ? [' Left', ' Right'] : [''];
+      sides.forEach((side, j) => {
+        out.push({ kind: 'ex', text: `${amount} ${it.name}${side}`, fase: it.fase || null });
+        const lastSide = j === sides.length - 1; const lastSet = s === series - 1;
+        if (!lastSide) out.push({ kind: 'pausa', secs: FL_SIDE_PAUSE });
+        else if (!lastSet) out.push({ kind: 'pausa', secs: between });
+      });
+    }
+    if (k < items.length - 1) out.push({ kind: 'pausa', secs: FL_EXERCISE_PAUSE });
+  });
+  return out;
+}
+// Duración aproximada: ~3 s por repetición, más pausas.
+export function freeleticsMinutes(list) {
+  const secs = list.reduce((t, e) => {
+    if (e.kind === 'pausa') return t + e.secs;
+    const m = e.text.match(/^(\d+)(s|x)/);
+    return t + (m ? (m[2] === 's' ? +m[1] : +m[1] * 3) : 30);
+  }, 0);
+  return Math.round(secs / 60);
 }
 
-function FreeleticsExport({ session }) {
+function FreeleticsExport({ session, onRename }) {
   const [open, setOpen] = useState(false);
-  const { mob, rounds, cool } = freeleticsRounds(session);
-  const text = [
-    `Workout: ${session.title || 'Sesión en casa'}`,
-    ...(mob.length ? ['', 'Calentamiento / movilidad:', ...mob.map((m) => `- ${m.name} · ${m.amount}`)] : []),
-    ...rounds.flatMap((r, i) => ['', `Ronda ${i + 1}/${rounds.length}`, ...r.flatMap((x) => [`+ Exercise: ${x.name} · ${x.amount}`, `+ Pausa: ${x.pausa} s`])]),
-    ...(cool.length ? ['', 'Vuelta a la calma:', ...cool.map((m) => `- ${m.name} · ${m.amount}`)] : []),
-  ].join('\n');
+  const list = freeleticsList(session);
+  const name = session.freeleticsName || '';
+  const text = [`Nombre: ${name || session.title || 'Sesión en casa'}`, '', ...list.map((e) => (e.kind === 'pausa' ? `${e.secs}s Pausa` : e.text))].join('\n');
+  const nEx = list.filter((e) => e.kind === 'ex').length;
   return html`
     <section class="panel stack-sm">
-      <button class="row-between" style="background:none;border:0;padding:0;cursor:pointer;color:var(--ink)" aria-expanded=${open} onClick=${() => setOpen(!open)}>
-        <span class="eyebrow">Crear este workout en Freeletics</span><${Icon} name=${open ? 'back' : 'chevron'} size="16" />
+      <div class="stack-sm" style="gap:4px">
+        <span class="eyebrow">Nombre para guardar en Freeletics</span>
+        <div class="row" style="flex-wrap:nowrap">
+          <input id="fl-name" class="input grow" maxlength="30" aria-label="Nombre del workout en Freeletics" placeholder="Ej. Empuje y core 01" value=${name} onInput=${(e) => onRename?.(e.target.value)} />
+          <button class="btn btn-sm" disabled=${!name} onClick=${() => copyText(name)}><${Icon} name="copy" size="16" /> Copiar</button>
+        </div>
+      </div>
+      <button class="row-between" style="background:none;border:0;padding:0;cursor:pointer;color:var(--ink);text-align:left;flex-wrap:nowrap;gap:8px;width:100%" aria-expanded=${open} onClick=${() => setOpen(!open)}>
+        <span class="eyebrow">Lista para Crear workout · ${nEx} entradas · ~${freeleticsMinutes(list)} min</span><${Icon} name=${open ? 'back' : 'chevron'} size="16" />
       </button>
       ${open && html`
-        <p class="small">En Freeletics: Crear workout → ponle el nombre → en cada ronda toca <b>+ Exercise</b> y <b>+ Pausa</b> en este orden. Con "Duplicar ronda" ahorras pasos si las rondas son iguales.</p>
-        <div class="copybox">${text}</div>
-        <button class="btn btn-sm" style="align-self:flex-start" onClick=${() => copyText(text)}><${Icon} name="copy" size="16" /> Copiar</button>
+        <p class="small">En Freeletics: Crear workout → ponle el nombre → agrega en este orden cada <b>Exercise</b> (con sus repeticiones o segundos y el lado) y cada <b>Pausa</b>.</p>
+        <ol class="fl-list">${list.map((e) => (e.kind === 'pausa'
+          ? html`<li class="pausa">${e.secs}s Pausa</li>`
+          : html`<li>${e.text}</li>`))}</ol>
+        <button class="btn btn-sm" style="align-self:flex-start" onClick=${() => copyText(text)}><${Icon} name="copy" size="16" /> Copiar lista</button>
         <p class="xs muted">Al terminar, registra aquí las repeticiones o segundos reales para que cuenten en tu progreso.</p>`}
     </section>`;
 }
@@ -420,7 +453,7 @@ export function SessionEditor({ session, mode = 'live', onClosed }) {
         <div class="row small muted num"><span>${active.length} ejercicios</span>·<span>${totalSets} series</span>${vol ? html`·<span>${fmtNum(vol, 0)} kg movidos</span>` : null}</div>
       </header>
 
-      ${draft.lugar === 'freeletics' && mode === 'live' && html`<${FreeleticsExport} session=${draft} />`}
+      ${draft.lugar === 'freeletics' && html`<${FreeleticsExport} session=${draft} onRename=${(v) => commit({ ...draft, freeleticsName: v })} />`}
       ${plan?.razonamiento && html`
         <section class="panel stack-sm">
           <span class="eyebrow">Por qué esta sesión</span>

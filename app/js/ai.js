@@ -159,6 +159,7 @@ function activitiesBlock(activities = [], days = 14) {
 }
 
 export const modalidadOf = (e) => e?.modalidad || 'forus';
+export const freeleticsNames = (sessions = []) => [...new Set(sessions.map((s) => s.freeleticsName).filter(Boolean))];
 
 // Movilidad, estiramientos y cardio sirven en cualquier lugar para calentar o enfriar:
 // además del catálogo del lugar, se ofrecen los de la otra modalidad que sean de ese tipo.
@@ -228,14 +229,18 @@ REGLAS
 - Prioriza los músculos por debajo de su rango semanal y los que llevan más días sin trabajarse; evita repetir un grupo trabajado fuerte hace menos de 48 h.
 - Si en las últimas 24-48 h hubo natación u otro cardio exigente, tenlo en cuenta: la natación carga hombros y dorsales, así que modera el volumen de esos grupos ese día.
 - Protege rodilla derecha y espalda: con dolor ≥4/10 evita ejercicios marcados "precaucion" para esa zona o reduce rango y carga; nunca uses "evitar". Explica la precaución concreta.
-${fl ? '- Peso corporal: "peso" siempre null. Progresa con más repeticiones, más segundos, tempo más lento o una variante más difícil del catálogo. Para ejercicios medidos en segundos usa "segundos" y deja "reps" en null. Indica en la nota si es por lado.\n- Incluye calentamiento de movilidad y cierre con estiramientos cuando quepa en el tiempo.' : '- Progresión: si la última vez cumplió las repeticiones con RIR ≥2, sube la carga ~2.5-5%; si no, mantenla. Sugiere el peso en kg cuando haya historial; si no lo hay, deja peso en null.'}
+${fl ? `- Peso corporal: "peso" siempre null. Progresa con más repeticiones, más segundos, tempo más lento o una variante más difícil del catálogo.
+- Respeta cómo mide Freeletics cada ejercicio: si el catálogo dice "se mide en segundos", usa "segundos" y deja "reps" en null; si no lo dice, usa "reps" (número entero, p. ej. "10") y deja "segundos" en null. Freeletics no permite cambiar esa medida.
+- Esquema de Freeletics: cada serie es una entrada; si es "por lado", la serie se hace izquierda y derecha (las reps o segundos son por lado). Pausa de 10 s entre series y entre lados, y 30 s entre ejercicios. "descansoSeg" es la pausa entre series: 10 s en movilidad y estiramientos; 10-30 s en fuerza.
+- Incluye calentamiento de movilidad y cierre con estiramientos cuando quepa en el tiempo.
+- Pon en "nombre_freeletics" un nombre corto para guardar el workout en Freeletics (máximo 24 caracteres, sin fecha, en español, que diga el enfoque; p. ej. "Empuje y core 02"). No repitas estos nombres ya usados: ${freeleticsNames(sessions).join(', ') || 'ninguno'}.` : '- Progresión: si la última vez cumplió las repeticiones con RIR ≥2, sube la carga ~2.5-5%; si no, mantenla. Sugiere el peso en kg cuando haya historial; si no lo hay, deja peso en null.'}
 - La sesión debe caber en el tiempo disponible contando calentamiento y descansos.
 - El calentamiento y la vuelta a la calma también son ejercicios, con la misma forma que los del bloque: cada uno se muestra con su dibujo y su explicación. Elige del catálogo (movilidad, estiramientos, cardio o series ligeras de aproximación de un ejercicio del bloque). Cardio y estiramientos sostenidos van en "segundos" (5 min = 300) con "reps" null; normalmente 1 serie y "descansoSeg" 0. Para series de aproximación pon el peso ligero en "peso".
 - Usa ejercicios del catálogo por su id. Solo si hace falta uno que no existe, ponlo en "nuevo" con exerciseId null.
 - Escribe en español, breve y directo.
 
 Responde SOLO con un JSON con esta forma exacta:
-{"titulo": "Torso — empuje y espalda", "enfoque": ["pecho","dorsales"], "razonamiento": "2-4 frases de por qué esta sesión hoy", "calentamiento": [{"exerciseId": "${fl ? 'fl-cat-cow' : 'eliptica'}", "nuevo": null, "series": 1, "reps": null, "segundos": ${fl ? 60 : 300}, "peso": null, "rir": null, "descansoSeg": 0, "nota": "ritmo suave"}], "ejercicios": [{"exerciseId": "press-pecho-maquina", "nuevo": null, "series": 3, "reps": "8-10", "segundos": null, "peso": 40, "rir": 2, "descansoSeg": 90, "nota": "consejo corto"}], "vuelta_calma": [{"exerciseId": "...", "nuevo": null, "series": 1, "reps": null, "segundos": 30, "peso": null, "rir": null, "descansoSeg": 0, "nota": "..."}], "precauciones": ["..."]}
+{"titulo": "Torso — empuje y espalda",${fl ? ' "nombre_freeletics": "Empuje y core 02",' : ''} "enfoque": ["pecho","dorsales"], "razonamiento": "2-4 frases de por qué esta sesión hoy", "calentamiento": [{"exerciseId": "${fl ? 'fl-cat-cow' : 'eliptica'}", "nuevo": null, "series": ${fl ? 2 : 1}, "reps": ${fl ? '"10"' : 'null'}, "segundos": ${fl ? 'null' : 300}, "peso": null, "rir": null, "descansoSeg": ${fl ? 10 : 0}, "nota": "ritmo suave"}], "ejercicios": [{"exerciseId": "press-pecho-maquina", "nuevo": null, "series": 3, "reps": "8-10", "segundos": null, "peso": 40, "rir": 2, "descansoSeg": 90, "nota": "consejo corto"}], "vuelta_calma": [{"exerciseId": "...", "nuevo": null, "series": 1, "reps": null, "segundos": 30, "peso": null, "rir": null, "descansoSeg": 0, "nota": "..."}], "precauciones": ["..."]}
 Para un ejercicio nuevo: "exerciseId": null, "nuevo": {"name": "...", "primary": ["id_musculo"], "secondary": [], "equipment": "...", "knee": "ok|precaucion|evitar", "back": "ok|precaucion|evitar", "categoria": "fuerza|movilidad|cardio", "medida": "reps|tiempo"}. Ids de músculo válidos: ${MUSCLES.map((m) => m.id).join(', ')}.`;
 }
 

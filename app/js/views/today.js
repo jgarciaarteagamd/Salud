@@ -51,6 +51,7 @@ async function planToSession(plan, checkin) {
   return {
     id: newId('s'), date: todayKey(), status: 'plan', source: 'ia', lugar,
     title: plan.titulo || 'Sesión de hoy', enfoque: validMuscles(plan.enfoque),
+    ...(lugar === 'freeletics' ? { freeleticsName: String(plan.nombre_freeletics || plan.titulo || '').slice(0, 30) } : {}),
     plan: {
       razonamiento: plan.razonamiento || '', calentamiento: notes.calentamiento, vuelta_calma: notes.enfriamiento,
       precauciones: plan.precauciones || [], generadoEn: new Date().toISOString(), checkin,
