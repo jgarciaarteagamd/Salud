@@ -1,6 +1,6 @@
 // Cuerpo: medidas (antropometría, bioimpedancia, Samsung Watch) y nutrición (Fitia).
 // Cada registro se crea desde capturas que Claude lee, o a mano; siempre se revisa antes de guardar.
-import { useStore, saveDoc, deleteDoc, newId, uploadImage, canUpload, assetUrl } from '../store.js';
+import { useStore, saveDoc, deleteDoc, newId, uploadImage, canUpload, assetUrl, blobsFromAssets } from '../store.js';
 import {
   MEASURE_GROUPS, MEASURE_FIELDS, MEASURE_TYPES, NUTRITION_FIELDS, NUTRITION_GROUPS, WEEKLY_GROUPS, WEEKLY_FIELDS, isWeekly,
   NUTRITION_FIELD, FOOD_QUALITY, metaOf,
@@ -37,12 +37,13 @@ function EntrySheet({ kind, entry, weekly, onClose }) {
   useEffect(() => { const urls = files.map((f) => URL.createObjectURL(f)); setPreviews(urls); return () => urls.forEach((u) => URL.revokeObjectURL(u)); }, [files]);
 
 
+  // Las capturas recién elegidas o, si no hay, las ya guardadas en el registro.
+  const pickImgs = () => (files.length ? files : blobsFromAssets(entry?.imagenes || []));
   async function read() {
-    if (!files.length) return;
     setBusy('read'); setErr(''); ctl.current = new AbortController();
     try {
-      const r = isNut ? await extractNutrition(files, { signal: ctl.current.signal, weekly: isWeek })
-        : await extractMeasurements(files, MEASURE_TYPES[tipo], { signal: ctl.current.signal });
+      const r = isNut ? await extractNutrition(await pickImgs(), { signal: ctl.current.signal, weekly: isWeek })
+        : await extractMeasurements(await pickImgs(), MEASURE_TYPES[tipo], { signal: ctl.current.signal });
       const week = isNut && r?.periodo === 'semana';
       if (isNut) setPeriodo(week ? 'semana' : 'dia');
       if (week && r?.fechaFin && /^\d{4}-\d{2}-\d{2}$/.test(r.fechaFin)) setDateEnd(r.fechaFin);
@@ -62,18 +63,21 @@ function EntrySheet({ kind, entry, weekly, onClose }) {
       if (isNut && FOOD_QUALITY.includes(r?.calidad)) setCalidad(r.calidad);
       setSummary(r?.resumen || '');
       toast('Valores leídos: revísalos antes de guardar');
-    } catch (e) { setErr(errorCopy(e)); } finally { setBusy(''); }
+    } catch (e) { setErr(e?.code === 'asset_fetch' ? 'No se pudo abrir la captura guardada. Vuelve a elegirla.' : errorCopy(e)); } finally { setBusy(''); }
   }
 
   async function save() {
     const valores = {};
     for (const f of fields) { const n = num(vals[f.key]); if (n != null) valores[f.key] = n; }
-    if (!Object.keys(valores).length) { setErr('Agrega al menos un valor.'); return; }
+    const hasValues = Object.keys(valores).length > 0;
+    // Sin valores se puede guardar solo la captura, para leerla después con Claude.
+    if (!hasValues && !files.length && !entry?.imagenes?.length) { setErr('Elige una captura o escribe al menos un valor.'); return; }
+    if (!hasValues && files.length && !canUpload()) { setErr('En esta vista no se pueden guardar imágenes. Escribe los valores o abre la app desde el navegador.'); return; }
     setBusy('save');
     try {
       const imagenes = [...(entry?.imagenes || [])];
       if (files.length && canUpload()) for (const f of files) imagenes.push(await uploadImage(f));
-      const doc = { ...(entry || {}), date, valores, notas, imagenes, createdAt: entry?.createdAt || new Date().toISOString() };
+      const doc = { ...(entry || {}), date, valores, notas, imagenes, createdAt: entry?.createdAt || new Date().toISOString(), pendiente: !hasValues };
       if (!isNut) { doc.tipo = tipo; doc.otros = otros; }
       if (isNut) {
         doc.periodo = periodo; doc.fuente = entry?.fuente || 'fitia';
@@ -81,7 +85,7 @@ function EntrySheet({ kind, entry, weekly, onClose }) {
         if (isWeek) { doc.dateEnd = dateEnd || null; doc.fortalezas = notes2.fortalezas; doc.mejoras = notes2.mejoras; }
       }
       await saveDoc(isNut ? 'nutrition' : 'measurements', entry?.id || newId(isNut ? 'n' : 'm'), doc);
-      toast('Registro guardado');
+      toast(hasValues ? 'Registro guardado' : 'Captura guardada: léela con Claude cuando puedas');
       onClose();
     } catch (e) { setErr(e?.code === 'quota_or_state' ? 'No queda espacio para imágenes. Guarda sin captura.' : 'No se pudo guardar. Intenta de nuevo.'); } finally { setBusy(''); }
   }
@@ -106,7 +110,7 @@ function EntrySheet({ kind, entry, weekly, onClose }) {
         <${FilePick} id="en-files" count=${files.length} onPick=${(fl) => { setFiles(fl.slice(0, imgCaps?.maxCount || 6)); setErr(''); }} />
         ${previews.length ? html`<div class="thumbs">${previews.map((u) => html`<img src=${u} alt="Captura seleccionada" />`)}</div>` : null}
         ${entry?.imagenes?.length ? html`<div class="thumbs">${entry.imagenes.map((id) => html`<img src=${assetUrl(id)} alt="Captura guardada" />`)}</div>` : null}
-        ${files.length && imgCaps ? (busy === 'read'
+        ${(files.length || entry?.imagenes?.length) && imgCaps ? (busy === 'read'
           ? html`<div class="row"><${Thinking} text="Leyendo la captura…" /><button class="btn btn-sm" onClick=${() => ctl.current?.abort()}>Detener</button></div>`
           : html`<button class="btn btn-primary" onClick=${read}><${Icon} name="spark" /> Leer con Claude</button>`) : null}
         ${summary && html`<p class="small">${summary}</p>`}
@@ -137,6 +141,17 @@ function EntrySheet({ kind, entry, weekly, onClose }) {
     </${Sheet}>`;
 }
 
+// Capturas guardadas sin leer (p. ej. desde una vista donde Claude no podía leer imágenes).
+function Pending({ list, open }) {
+  const pend = list.filter((e) => e.pendiente).sort((a, b) => (a.date < b.date ? 1 : -1));
+  if (!pend.length) return null;
+  return html`<div class="panel stack-sm">
+    <span class="eyebrow">${pend.length === 1 ? '1 captura sin leer' : `${pend.length} capturas sin leer`}</span>
+    <p class="small muted">Ábrela desde una vista donde Claude pueda leer imágenes (el navegador) y toca “Leer con Claude”.</p>
+    <div class="row">${pend.map((e) => html`<button class="btn btn-sm" onClick=${() => open({ entry: e })}><${Icon} name="image" size="16" /> ${fmtShort(e.date)}</button>`)}</div>
+  </div>`;
+}
+
 function Measures({ list, open }) {
   const [metric, setMetric] = useState('peso');
   const [pick, setPick] = useState(null);
@@ -150,6 +165,7 @@ function Measures({ list, open }) {
   if (!list.length) return html`<div class="empty"><p>Sin medidas todavía. Sube una captura de tu antropometría, de la báscula o de Samsung Health.</p><button class="btn btn-primary" onClick=${() => open({})}><${Icon} name="camera" /> Subir captura</button></div>`;
   return html`
     <div class="stack">
+      <${Pending} list=${list} open=${open} />
       <div class="card stack-sm">
         <div class="row-between"><span class="eyebrow">${f?.label} · ${f?.unit}</span>
           <select id="metric" class="select" style="width:auto;min-height:34px" value=${metric} onChange=${(e) => setMetric(e.target.value)}>${used.map((u) => html`<option value=${u.key}>${u.label}</option>`)}</select></div>
@@ -223,6 +239,7 @@ function Nutrition({ list, open }) {
   if (!list.length) return html`<div class="empty"><p>Sube la captura del resumen diario de Fitia y Claude registra calorías y macros.</p><button class="btn btn-primary" onClick=${() => open({})}><${Icon} name="camera" /> Subir captura de Fitia</button></div>`;
   return html`
     <div class="stack">
+      <${Pending} list=${list} open=${open} />
       <div class="kpis">
         ${[['kcal', 'Calorías', 'kcal', 'kcalObjetivo'], ['proteina', 'Proteína', 'g', 'proteinaObjetivo'], ['carbohidratos', 'Carbos', 'g', 'carbObjetivo'], ['grasa', 'Grasa', 'g', 'grasaObjetivo']].map(([k, l, u, meta]) => html`
           <div class="kpi"><span class="eyebrow">${l} · prom. ${last7.length ? '7 d' : 'últimos 7 reg.'}</span><span class="v">${avg(k) == null ? '—' : fmtNum(avg(k), 0)}<small>${u}</small></span><span class="delta flat">${avg(meta) != null ? `meta ${fmtNum(avg(meta), 0)} ${u} · ` : ''}${last7.length ? `${last7.length} de 7 días` : `último: ${fmtShort(sorted[sorted.length - 1]?.date || todayKey())}`}</span></div>`)}

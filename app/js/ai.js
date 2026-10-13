@@ -66,8 +66,8 @@ function sessionLine(s) {
     parts.push(`  - ${it.name}${tag}: ${sets || 'sin series registradas'}${it.note ? ` · nota: ${it.note}` : ''}`);
   }
   const post = s.post ? ` · post: RPE ${s.post.rpe ?? '?'}, dolor rodilla ${s.post.dolorRodilla ?? '?'}/10, espalda ${s.post.dolorEspalda ?? '?'}/10${s.post.notas ? `, "${s.post.notas}"` : ''}` : '';
-  const r = s.reloj;
-  const watch = r ? ` · reloj: ${[r.duracionMin && `${fmtNum(r.duracionMin, 0)} min`, r.kcal && `${r.kcal} kcal`, r.fcMedia && `FC media ${r.fcMedia}`, r.fcMax && `FC máx ${r.fcMax}`, r.zonasFC].filter(Boolean).join(', ')}` : '';
+  const rel = (s.relojes || (s.reloj ? [s.reloj] : [])).filter((r) => !r.pendiente);
+  const watch = rel.length ? ` · reloj: ${rel.map((r) => `${r.parte && r.parte !== 'sesion' ? `${r.parte} ` : ''}${[r.actividad, r.duracionMin && `${fmtNum(r.duracionMin, 0)} min`, r.kcal && `${r.kcal} kcal`, r.fcMedia && `FC media ${r.fcMedia}`, r.fcMax && `FC máx ${r.fcMax}`, r.zonasFC].filter(Boolean).join(', ')}`).join(' | ')}` : '';
   return `${s.date} — ${s.lugar === 'freeletics' ? '[Freeletics en casa] ' : ''}${s.title || 'Sesión'}${post}${watch}\n${parts.join('\n')}`;
 }
 

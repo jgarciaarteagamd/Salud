@@ -1,6 +1,6 @@
 // Cardio y otras actividades (natación, caminata, bicicleta…): se registran desde la captura de
 // Samsung Health que Claude lee, o a mano. No suman series de fuerza, pero el plan las tiene en cuenta.
-import { saveDoc, deleteDoc, newId, uploadImage, canUpload, assetUrl } from '../store.js';
+import { saveDoc, deleteDoc, newId, uploadImage, canUpload, assetUrl, blobsFromAssets } from '../store.js';
 import { ACTIVITY_TYPES, ACTIVITY_FIELDS, paceLabel, fmtClock } from '../fields.js';
 import { extractActivity, imageLimits, errorCopy } from '../ai.js';
 import { todayKey, fmtDay, fmtNum, num, parseDay, DIAS_CORTOS } from '../stats.js';
@@ -19,6 +19,7 @@ export function activityTitle(a) {
   return `${ACTIVITY_TYPES[a.tipo] || 'Actividad'}${d ? ` · ${d >= 1000 ? `${fmtNum(d / 1000, 2)} km` : `${fmtNum(d, 0)} m`}` : ''}`;
 }
 export function activitySubtitle(a) {
+  if (a.pendiente) return 'Captura sin leer: ábrela y toca “Leer con Claude”';
   const v = a.valores || {};
   return [v.duracionMin && fmtClock(v.duracionMin * 60), paceLabel(a), v.fcMedia && `${fmtNum(v.fcMedia, 0)} lpm`, v.kcal && `${fmtNum(v.kcal, 0)} kcal`].filter(Boolean).join(' · ');
 }
@@ -41,10 +42,12 @@ export function ActivitySheet({ entry, onClose }) {
   useEffect(() => { imageLimits().then(setImgCaps); }, []);
   useEffect(() => { const urls = files.map((f) => URL.createObjectURL(f)); setPreviews(urls); return () => urls.forEach((u) => URL.revokeObjectURL(u)); }, [files]);
 
+  // Las capturas recién elegidas o, si no hay, las ya guardadas en el registro.
+  const pickImgs = () => (files.length ? files : blobsFromAssets(entry?.imagenes || []));
   async function read() {
     setBusy('read'); setErr(''); ctl.current = new AbortController();
     try {
-      const r = await extractActivity(files, { signal: ctl.current.signal });
+      const r = await extractActivity(await pickImgs(), { signal: ctl.current.signal });
       const next = { ...vals };
       for (const [k, v] of Object.entries(r?.valores || {})) if (ACTIVITY_FIELDS.some((f) => f.key === k) && num(v) != null) next[k] = String(num(v));
       setVals(next);
@@ -56,13 +59,16 @@ export function ActivitySheet({ entry, onClose }) {
       setExtra({ ritmo: r?.ritmo || extra.ritmo, zonasFC: r?.zonasFC || extra.zonasFC, dispositivo: r?.dispositivo || extra.dispositivo });
       setSummary(r?.resumen || '');
       toast('Datos leídos: revísalos antes de guardar');
-    } catch (e) { setErr(errorCopy(e)); } finally { setBusy(''); }
+    } catch (e) { setErr(e?.code === 'asset_fetch' ? 'No se pudo abrir la captura guardada. Vuelve a elegirla.' : errorCopy(e)); } finally { setBusy(''); }
   }
 
   async function save() {
     const valores = {};
     for (const f of ACTIVITY_FIELDS) { const n = num(vals[f.key]); if (n != null) valores[f.key] = n; }
-    if (!Object.keys(valores).length) { setErr('Agrega al menos la duración o la distancia.'); return; }
+    const hasValues = Object.keys(valores).length > 0;
+    // Sin valores se puede guardar solo la captura, para leerla después con Claude.
+    if (!hasValues && !files.length && !entry?.imagenes?.length) { setErr('Elige una captura o escribe al menos un valor.'); return; }
+    if (!hasValues && files.length && !canUpload()) { setErr('En esta vista no se pueden guardar imágenes. Escribe los valores o abre la app desde el navegador.'); return; }
     setBusy('save');
     try {
       const imagenes = [...(entry?.imagenes || [])];
@@ -70,10 +76,10 @@ export function ActivitySheet({ entry, onClose }) {
       const doc = {
         ...(entry || {}), date, hora, tipo, lugar, valores, notas, imagenes,
         largos: largos.filter((l) => l.tiempo), ...extra, fuente: entry?.fuente || 'reloj',
-        createdAt: entry?.createdAt || new Date().toISOString(),
+        createdAt: entry?.createdAt || new Date().toISOString(), pendiente: !hasValues,
       };
       await saveDoc('activities', entry?.id || newId('a'), doc);
-      toast('Actividad guardada');
+      toast(hasValues ? 'Actividad guardada' : 'Captura guardada: léela con Claude cuando puedas');
       onClose();
     } catch (e) { setErr(e?.code === 'quota_or_state' ? 'No queda espacio para imágenes. Guarda sin captura.' : 'No se pudo guardar. Intenta de nuevo.'); } finally { setBusy(''); }
   }
@@ -95,7 +101,7 @@ export function ActivitySheet({ entry, onClose }) {
         <${FilePick} id="ac-files" count=${files.length} onPick=${(fl) => { setFiles(fl.slice(0, imgCaps?.maxCount || 6)); setErr(''); }} />
         ${previews.length ? html`<div class="thumbs">${previews.map((u) => html`<img src=${u} alt="Captura seleccionada" />`)}</div>` : null}
         ${entry?.imagenes?.length ? html`<div class="thumbs">${entry.imagenes.map((id) => html`<img src=${assetUrl(id)} alt="Captura guardada" />`)}</div>` : null}
-        ${files.length && imgCaps ? (busy === 'read'
+        ${(files.length || entry?.imagenes?.length) && imgCaps ? (busy === 'read'
           ? html`<div class="row"><${Thinking} text="Leyendo la captura…" /><button class="btn btn-sm" onClick=${() => ctl.current?.abort()}>Detener</button></div>`
           : html`<button class="btn btn-primary" onClick=${read}><${Icon} name="spark" /> Leer con Claude</button>`) : null}
         ${summary && html`<p class="small">${summary}</p>`}

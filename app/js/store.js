@@ -145,6 +145,12 @@ export async function uploadImage(file) {
   return res.id;
 }
 export const assetUrl = (id) => (id ? `/_blob/${id}` : null);
+// Capturas ya guardadas, para volver a leerlas con Claude.
+export async function blobsFromAssets(ids = []) {
+  try {
+    return await Promise.all(ids.map(async (id) => { const r = await fetch(assetUrl(id)); if (!r.ok) throw new Error(String(r.status)); return r.blob(); }));
+  } catch { throw { code: 'asset_fetch' }; }
+}
 
 // Imagen de un ejercicio: asset subido por ti, o dibujo publicado con la app.
 export function exerciseImage(ex) {

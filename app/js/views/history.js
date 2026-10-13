@@ -56,7 +56,7 @@ export function HistoryView({ param, go }) {
                 <div class="stack-sm" style="gap:4px;min-width:0">
                   <b style="font-family:var(--f-display);font-size:1.15rem;font-weight:600">${s.title || 'Sesión'}</b>
                   <span class="xs muted num">${sessionSetCount(s)} series${sessionVolume(s) ? ` · ${fmtNum(sessionVolume(s), 0)} kg` : ''}${s.post?.rpe ? ` · RPE ${s.post.rpe}` : ''}</span>
-                  ${s.reloj ? html`<span class="xs muted num">Reloj: ${watchSummary(s.reloj)}</span>` : null}
+                  ${watchSummary(s) ? html`<span class="xs muted num">Reloj: ${watchSummary(s)}</span>` : null}
                   <div class="chips">
                     ${mus.slice(0, 4).map((x) => html`<span class="chip">${muscleShort(x)}</span>`)}
                     ${ch.sustituidos ? html`<span class="chip primary">${ch.sustituidos} sustituido${ch.sustituidos > 1 ? 's' : ''}</span>` : null}

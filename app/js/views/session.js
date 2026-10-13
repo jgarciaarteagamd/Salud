@@ -473,7 +473,7 @@ export function SessionEditor({ session, mode = 'live', onClosed }) {
       </header>
 
       ${draft.lugar === 'freeletics' && html`<${FreeleticsExport} session=${draft} onRename=${(v) => commit({ ...draft, freeleticsName: v })} />`}
-      <${WatchPanel} session=${draft} onSave=${(reloj) => commit({ ...draft, reloj })} />
+      <${WatchPanel} session=${draft} onSave=${(relojes) => commit({ ...draft, relojes, reloj: undefined })} />
       ${plan?.razonamiento && html`
         <section class="panel stack-sm">
           <span class="eyebrow">Por qué esta sesión</span>
