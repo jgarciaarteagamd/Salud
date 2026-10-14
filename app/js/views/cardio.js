@@ -40,14 +40,16 @@ export function ActivitySheet({ entry, onClose }) {
   const ctl = useRef(null);
 
   useEffect(() => { imageLimits().then(setImgCaps); }, []);
+  // Captura guardada sin leer: se lee sola al abrirla en una vista que puede leer imágenes.
+  useEffect(() => { if (imgCaps && entry?.pendiente && entry?.imagenes?.length) read(); }, [imgCaps]);
   useEffect(() => { const urls = files.map((f) => URL.createObjectURL(f)); setPreviews(urls); return () => urls.forEach((u) => URL.revokeObjectURL(u)); }, [files]);
 
   // Las capturas recién elegidas o, si no hay, las ya guardadas en el registro.
   const pickImgs = () => (files.length ? files : blobsFromAssets(entry?.imagenes || []));
-  async function read() {
+  async function read(override) {
     setBusy('read'); setErr(''); ctl.current = new AbortController();
     try {
-      const r = await extractActivity(await pickImgs(), { signal: ctl.current.signal });
+      const r = await extractActivity((override || await pickImgs()), { signal: ctl.current.signal });
       const next = { ...vals };
       for (const [k, v] of Object.entries(r?.valores || {})) if (ACTIVITY_FIELDS.some((f) => f.key === k) && num(v) != null) next[k] = String(num(v));
       setVals(next);
@@ -66,6 +68,8 @@ export function ActivitySheet({ entry, onClose }) {
     const valores = {};
     for (const f of ACTIVITY_FIELDS) { const n = num(vals[f.key]); if (n != null) valores[f.key] = n; }
     const hasValues = Object.keys(valores).length > 0;
+    // Si hay captura y Claude puede leerla, primero se lee y se revisa; luego se guarda.
+    if (!hasValues && imgCaps && (files.length || entry?.imagenes?.length)) { await read(); return; }
     // Sin valores se puede guardar solo la captura, para leerla después con Claude.
     if (!hasValues && !files.length && !entry?.imagenes?.length) { setErr('Elige una captura o escribe al menos un valor.'); return; }
     if (!hasValues && files.length && !canUpload()) { setErr('En esta vista no se pueden guardar imágenes. Escribe los valores o abre la app desde el navegador.'); return; }
@@ -98,7 +102,7 @@ export function ActivitySheet({ entry, onClose }) {
       <div class="panel stack-sm">
         <span class="eyebrow">Capturas de Samsung Health</span>
         <p class="small muted">Sube el resumen del ejercicio y, si quieres, la pantalla de largos o vueltas.${imgCaps ? ' Claude leerá los datos.' : ' En esta vista Claude no puede leer imágenes; se guardan como respaldo.'}</p>
-        <${FilePick} id="ac-files" count=${files.length} onPick=${(fl) => { setFiles(fl.slice(0, imgCaps?.maxCount || 6)); setErr(''); }} />
+        <${FilePick} id="ac-files" count=${files.length} onPick=${(fl) => { const sel = fl.slice(0, imgCaps?.maxCount || 6); setFiles(sel); setErr(''); if (imgCaps && sel.length) read(sel); }} />
         ${previews.length ? html`<div class="thumbs">${previews.map((u) => html`<img src=${u} alt="Captura seleccionada" />`)}</div>` : null}
         ${entry?.imagenes?.length ? html`<div class="thumbs">${entry.imagenes.map((id) => html`<img src=${assetUrl(id)} alt="Captura guardada" />`)}</div>` : null}
         ${(files.length || entry?.imagenes?.length) && imgCaps ? (busy === 'read'

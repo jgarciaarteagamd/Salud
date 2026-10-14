@@ -18,7 +18,7 @@ const isTimed = (it) => it.medida === 'tiempo';
 // Sin columna de peso: peso corporal, movilidad, cardio y lo que se mide en segundos al calentar o enfriar.
 const isBodyweight = (it) => it.modalidad === 'freeletics' || ['movilidad', 'cardio'].includes(it.categoria) || (isPhaseItem(it) && isTimed(it));
 
-// fase: 'calentamiento' | 'enfriamiento' | null (bloque principal).
+// fase: 'cardio' | 'calentamiento' | 'enfriamiento' | null (bloque principal).
 export function makeItem(ex, { origin = 'plan', planned = null, sessions = [], date = todayKey(), fase = null } = {}) {
   const lp = lastPerformance(sessions, ex.id, date, undefined, !!fase);
   const nSets = planned?.series || lp?.sets.length || (fase ? 1 : 3);
@@ -281,7 +281,7 @@ function RestTimer({ until, onDone }) {
 // con su pausa: 10 s entre series y lados, 30 s entre ejercicios.
 export const FL_SIDE_PAUSE = 10;
 export const FL_EXERCISE_PAUSE = 30;
-const PHASE_ORDER = { calentamiento: 0, enfriamiento: 2 };
+const PHASE_ORDER = { cardio: -1, calentamiento: 0, enfriamiento: 2 };
 export function freeleticsList(session) {
   const items = (session.items || []).filter((i) => i.status !== 'omitido')
     .map((it, i) => ({ it, i, o: PHASE_ORDER[it.fase] ?? 1 }))
@@ -404,11 +404,11 @@ export function SessionEditor({ session, mode = 'live', onClosed }) {
   const doNote = (uid) => setSheet({ kind: 'note', uid });
   const doAdd = (fase = null) => setSheet({
     kind: 'add',
-    title: fase === 'calentamiento' ? 'Agregar al calentamiento' : fase === 'enfriamiento' ? 'Agregar a la vuelta a la calma' : undefined,
+    title: fase === 'cardio' ? 'Agregar al cardio' : fase === 'calentamiento' ? 'Agregar al calentamiento' : fase === 'enfriamiento' ? 'Agregar a la vuelta a la calma' : undefined,
     onPick: (ex) => {
       // Se inserta al final de su fase para que el orden calentamiento → bloque → calma se mantenga.
       const it = makeItem(ex, { origin: 'agregado', sessions: others, date: draft.date, fase });
-      const order = (x) => (x.fase === 'calentamiento' ? 0 : x.fase === 'enfriamiento' ? 2 : 1);
+      const order = (x) => (x.fase === 'cardio' ? -1 : x.fase === 'calentamiento' ? 0 : x.fase === 'enfriamiento' ? 2 : 1);
       const at = draft.items.findIndex((x) => order(x) > order(it));
       const items = at < 0 ? [...draft.items, it] : [...draft.items.slice(0, at), it, ...draft.items.slice(at)];
       commit({ ...draft, items });
@@ -451,10 +451,11 @@ export function SessionEditor({ session, mode = 'live', onClosed }) {
   // Calentamiento y vuelta a la calma se muestran como el bloque: cada ejercicio con su dibujo y su ficha.
   // En sesiones antiguas pueden venir como texto (plan.calentamiento / plan.vuelta_calma).
   const phases = [
+    { key: 'car', fase: 'cardio', label: 'Cardio', items: active.filter((i) => i.fase === 'cardio'), notes: plan?.cardio },
     { key: 'cal', fase: 'calentamiento', label: 'Calentamiento', items: active.filter((i) => i.fase === 'calentamiento'), notes: plan?.calentamiento },
     { key: 'blq', fase: null, label: 'Bloque principal', items: active.filter((i) => !isPhaseItem(i)) },
     { key: 'enf', fase: 'enfriamiento', label: 'Vuelta a la calma', items: active.filter((i) => i.fase === 'enfriamiento'), notes: plan?.vuelta_calma },
-  ].filter((ph) => !ph.fase || mode === 'live' || ph.items.length || ph.notes?.length || draft.items.some((i) => i.fase === ph.fase));
+  ].filter((ph) => !ph.fase || (mode === 'live' && !(ph.fase === 'cardio' && draft.lugar === 'freeletics')) || ph.items.length || ph.notes?.length || draft.items.some((i) => i.fase === ph.fase));
   const hasPhases = phases.length > 1;
   const card = (it) => html`<${ExerciseCard} key=${it.uid} item=${it} ex=${exById[it.exerciseId]} sessions=${others} date=${draft.date} sessionId=${draft.id}
     onChange=${(x) => updateItem(it.uid, x)} onRemove=${() => removeItem(it.uid)}
@@ -487,7 +488,7 @@ export function SessionEditor({ session, mode = 'live', onClosed }) {
           ${ph.notes?.length ? html`<ul class="small phase-notes">${ph.notes.map((x) => html`<li>${x}</li>`)}</ul>` : null}
           ${ph.items.map(card)}
           ${ph.fase
-            ? html`<button class="btn btn-sm btn-ghost" style="align-self:flex-start" onClick=${() => doAdd(ph.fase)}><${Icon} name="plus" size="16" /> Agregar a ${ph.fase === 'calentamiento' ? 'calentamiento' : 'vuelta a la calma'}</button>`
+            ? html`<button class="btn btn-sm btn-ghost" style="align-self:flex-start" onClick=${() => doAdd(ph.fase)}><${Icon} name="plus" size="16" /> Agregar a ${ph.fase === 'cardio' ? 'cardio' : ph.fase === 'calentamiento' ? 'calentamiento' : 'vuelta a la calma'}</button>`
             : html`<button class="btn btn-block" onClick=${() => doAdd()}><${Icon} name="plus" /> Agregar ejercicio</button>`}
         </section>`)}
 

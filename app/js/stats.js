@@ -23,7 +23,7 @@ export const fmtNum = (v, d = 1) => (v == null ? '—' : (Math.round(v * 10 ** d
 // Serie efectiva: tiene repeticiones registradas y el ejercicio no fue omitido.
 export const isWorkSet = (s) => (num(s?.reps) ?? 0) > 0 || (num(s?.secs) ?? 0) > 0;
 // Calentamiento y vuelta a la calma: ejercicios con su tarjeta, pero fuera del bloque principal.
-export const isPhaseItem = (it) => it?.fase === 'calentamiento' || it?.fase === 'enfriamiento';
+export const isPhaseItem = (it) => it?.fase === 'cardio' || it?.fase === 'calentamiento' || it?.fase === 'enfriamiento';
 // Movilidad, estiramientos, cardio y lo que se hace al calentar o enfriar no suman series de fuerza al músculo.
 export const countsForVolume = (it) => !['movilidad', 'cardio'].includes(it?.categoria) && !isPhaseItem(it);
 // Por lado con valores distintos: "10/8" (izquierda/derecha).

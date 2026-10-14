@@ -34,16 +34,18 @@ function EntrySheet({ kind, entry, weekly, onClose }) {
   const fields = isWeek ? WEEKLY_FIELDS : isNut ? NUTRITION_FIELDS : MEASURE_FIELDS;
 
   useEffect(() => { imageLimits().then(setImgCaps); }, []);
+  // Captura guardada sin leer: se lee sola al abrirla en una vista que puede leer imágenes.
+  useEffect(() => { if (imgCaps && entry?.pendiente && entry?.imagenes?.length) read(); }, [imgCaps]);
   useEffect(() => { const urls = files.map((f) => URL.createObjectURL(f)); setPreviews(urls); return () => urls.forEach((u) => URL.revokeObjectURL(u)); }, [files]);
 
 
   // Las capturas recién elegidas o, si no hay, las ya guardadas en el registro.
   const pickImgs = () => (files.length ? files : blobsFromAssets(entry?.imagenes || []));
-  async function read() {
+  async function read(override) {
     setBusy('read'); setErr(''); ctl.current = new AbortController();
     try {
-      const r = isNut ? await extractNutrition(await pickImgs(), { signal: ctl.current.signal, weekly: isWeek })
-        : await extractMeasurements(await pickImgs(), MEASURE_TYPES[tipo], { signal: ctl.current.signal });
+      const r = isNut ? await extractNutrition((override || await pickImgs()), { signal: ctl.current.signal, weekly: isWeek })
+        : await extractMeasurements((override || await pickImgs()), MEASURE_TYPES[tipo], { signal: ctl.current.signal });
       const week = isNut && r?.periodo === 'semana';
       if (isNut) setPeriodo(week ? 'semana' : 'dia');
       if (week && r?.fechaFin && /^\d{4}-\d{2}-\d{2}$/.test(r.fechaFin)) setDateEnd(r.fechaFin);
@@ -70,6 +72,8 @@ function EntrySheet({ kind, entry, weekly, onClose }) {
     const valores = {};
     for (const f of fields) { const n = num(vals[f.key]); if (n != null) valores[f.key] = n; }
     const hasValues = Object.keys(valores).length > 0;
+    // Si hay captura y Claude puede leerla, primero se lee y se revisa; luego se guarda.
+    if (!hasValues && imgCaps && (files.length || entry?.imagenes?.length)) { await read(); return; }
     // Sin valores se puede guardar solo la captura, para leerla después con Claude.
     if (!hasValues && !files.length && !entry?.imagenes?.length) { setErr('Elige una captura o escribe al menos un valor.'); return; }
     if (!hasValues && files.length && !canUpload()) { setErr('En esta vista no se pueden guardar imágenes. Escribe los valores o abre la app desde el navegador.'); return; }
@@ -107,7 +111,7 @@ function EntrySheet({ kind, entry, weekly, onClose }) {
       <div class="panel stack-sm">
         <span class="eyebrow">Capturas</span>
         <p class="small muted">${isWeek ? 'Captura del “Score nutricional” de la semana en Fitia (puedes subir varias pantallas).' : isNut ? 'Captura del resumen del día en Fitia.' : 'Informe de antropometría, app de la báscula o Samsung Health.'}${imgCaps ? ' Claude leerá los valores.' : ' En esta vista Claude no puede leer imágenes; se guardan como respaldo.'}</p>
-        <${FilePick} id="en-files" count=${files.length} onPick=${(fl) => { setFiles(fl.slice(0, imgCaps?.maxCount || 6)); setErr(''); }} />
+        <${FilePick} id="en-files" count=${files.length} onPick=${(fl) => { const sel = fl.slice(0, imgCaps?.maxCount || 6); setFiles(sel); setErr(''); if (imgCaps && sel.length) read(sel); }} />
         ${previews.length ? html`<div class="thumbs">${previews.map((u) => html`<img src=${u} alt="Captura seleccionada" />`)}</div>` : null}
         ${entry?.imagenes?.length ? html`<div class="thumbs">${entry.imagenes.map((id) => html`<img src=${assetUrl(id)} alt="Captura guardada" />`)}</div>` : null}
         ${(files.length || entry?.imagenes?.length) && imgCaps ? (busy === 'read'

@@ -17,10 +17,10 @@ async function planToSession(plan, checkin) {
   const { exercises, sessions } = getState();
   const byId = Object.fromEntries(exercises.map((e) => [e.id, e]));
   const items = [];
-  const notes = { calentamiento: [], enfriamiento: [] };
+  const notes = { cardio: [], calentamiento: [], enfriamiento: [] };
   // Calentamiento y vuelta a la calma llegan como ejercicios (igual que el bloque); si Claude
   // manda texto suelto o un ejercicio que no se puede resolver, queda como nota de esa fase.
-  const phases = [['calentamiento', plan.calentamiento], [null, plan.ejercicios], ['enfriamiento', plan.vuelta_calma]];
+  const phases = [['cardio', plan.cardio], ['calentamiento', plan.calentamiento], [null, plan.ejercicios], ['enfriamiento', plan.vuelta_calma]];
   for (const [fase, list] of phases) {
     for (const p of Array.isArray(list) ? list : []) {
       if (typeof p === 'string') { if (fase) notes[fase].push(p); continue; }
@@ -53,7 +53,7 @@ async function planToSession(plan, checkin) {
     title: plan.titulo || 'Sesión de hoy', enfoque: validMuscles(plan.enfoque),
     ...(lugar === 'freeletics' ? { freeleticsName: String(plan.nombre_freeletics || plan.titulo || '').slice(0, 30) } : {}),
     plan: {
-      razonamiento: plan.razonamiento || '', calentamiento: notes.calentamiento, vuelta_calma: notes.enfriamiento,
+      razonamiento: plan.razonamiento || '', cardio: notes.cardio, calentamiento: notes.calentamiento, vuelta_calma: notes.enfriamiento,
       precauciones: plan.precauciones || [], generadoEn: new Date().toISOString(), checkin,
     },
     checkin, items, createdAt: new Date().toISOString(),

@@ -15,7 +15,7 @@ const FIELDS = [
   { key: 'fcMax', label: 'FC máxima', unit: 'lpm' },
 ];
 export const WATCH_PARTS = {
-  calentamiento: 'Calentamiento', bloque: 'Bloque principal', enfriamiento: 'Vuelta a la calma', sesion: 'Toda la sesión', otro: 'Otro',
+  cardio: 'Cardio (elíptica, cinta…)', calentamiento: 'Calentamiento', bloque: 'Bloque principal', enfriamiento: 'Vuelta a la calma', sesion: 'Toda la sesión', otro: 'Otro',
 };
 
 // Registros del reloj de una sesión (las sesiones antiguas tienen uno solo en `reloj`).
@@ -44,7 +44,8 @@ function guessPart(actividad, existing, hora) {
   const a = (actividad || '').toLowerCase();
   const block = existing.find((r) => r.parte === 'bloque' || r.parte === 'sesion');
   const before = block?.hora && hora ? hora < block.hora : !block;
-  if (/estiramiento|movilidad|yoga|el[ií]ptica|caminata|bicicleta|cinta/.test(a)) return before ? 'calentamiento' : 'enfriamiento';
+  if (/el[ií]ptica|caminata|bicicleta|cinta|remo|escaladora|correr|carrera/.test(a)) return 'cardio';
+  if (/estiramiento|movilidad|yoga/.test(a)) return before ? 'calentamiento' : 'enfriamiento';
   if (/m[aá]quinas|musculaci|pesas|fuerza|circuito/.test(a)) return existing.length ? 'bloque' : 'sesion';
   return existing.length ? 'otro' : 'sesion';
 }
@@ -58,13 +59,15 @@ function WatchSheet({ value, existing, onSave, onDelete, onClose }) {
   const [busy, setBusy] = useState(''); const [err, setErr] = useState('');
   const ctl = useRef(null);
   useEffect(() => { imageLimits().then(setImgCaps); }, []);
+  // Captura guardada sin leer: se lee sola al abrirla en una vista que puede leer imágenes.
+  useEffect(() => { if (imgCaps && value?.pendiente && value?.imagenes?.length) read(); }, [imgCaps]);
   useEffect(() => { const u = files.map((f) => URL.createObjectURL(f)); setPreviews(u); return () => u.forEach((x) => URL.revokeObjectURL(x)); }, [files]);
   const saved = value?.imagenes || [];
 
-  async function read() {
+  async function read(override) {
     setBusy('read'); setErr(''); ctl.current = new AbortController();
     try {
-      const imgs = files.length ? files : await blobsFromAssets(saved);
+      const imgs = override || (files.length ? files : await blobsFromAssets(saved));
       const r = await extractActivity(imgs, { signal: ctl.current.signal });
       const next = { ...vals };
       for (const f of FIELDS) if (num(r?.valores?.[f.key]) != null) next[f.key] = String(num(r.valores[f.key]));
@@ -80,6 +83,8 @@ function WatchSheet({ value, existing, onSave, onDelete, onClose }) {
     const out = { ...extra, parte: parte || guessPart(extra.actividad, existing, extra.hora) };
     for (const f of FIELDS) { const n = num(vals[f.key]); if (n != null) out[f.key] = n; }
     const hasValues = FIELDS.some((f) => out[f.key] != null);
+    // Si hay captura y Claude puede leerla, primero se lee y se revisa; luego se guarda.
+    if (!hasValues && imgCaps && (files.length || saved.length)) { await read(); return; }
     if (!hasValues && !files.length && !saved.length) { setErr('Elige la captura del reloj o escribe al menos la duración o las calorías.'); return; }
     setBusy('save');
     try {
@@ -100,7 +105,7 @@ function WatchSheet({ value, existing, onSave, onDelete, onClose }) {
     <${Sheet} title=${value ? 'Registro del reloj' : 'Agregar registro del reloj'} onClose=${() => { ctl.current?.abort(); onClose(); }}>
       <div class="panel stack-sm">
         <p class="small muted">Captura del resumen del entrenamiento en Samsung Health.${imgCaps ? ' Claude leerá los datos.' : ' En esta vista Claude no puede leer imágenes: guárdala y léela después desde el navegador, o escribe los valores.'}</p>
-        <${FilePick} id="w-files" count=${files.length} onPick=${(fl) => { setFiles(fl.slice(0, imgCaps?.maxCount || 4)); setErr(''); }} />
+        <${FilePick} id="w-files" count=${files.length} onPick=${(fl) => { const sel = fl.slice(0, imgCaps?.maxCount || 4); setFiles(sel); setErr(''); if (imgCaps && sel.length) read(sel); }} />
         ${previews.length ? html`<div class="thumbs">${previews.map((u) => html`<img src=${u} alt="Captura seleccionada" />`)}</div>` : null}
         ${saved.length ? html`<div class="thumbs">${saved.map((id) => html`<img src=${assetUrl(id)} alt="Captura guardada" />`)}</div>` : null}
         ${canRead ? (busy === 'read'
@@ -123,7 +128,7 @@ function WatchSheet({ value, existing, onSave, onDelete, onClose }) {
     </${Sheet}>`;
 }
 
-const ORDER = { calentamiento: 0, sesion: 1, bloque: 1, otro: 2, enfriamiento: 3 };
+const ORDER = { cardio: -1, calentamiento: 0, sesion: 1, bloque: 1, otro: 2, enfriamiento: 3 };
 
 export function WatchPanel({ session, onSave }) {
   const [open, setOpen] = useState(null); // {index} | {index: -1} para uno nuevo

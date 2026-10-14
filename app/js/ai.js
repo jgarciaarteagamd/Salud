@@ -10,7 +10,7 @@ import {
   activeItems, isWorkSet, fmtNum, num, fmtSet, sessionSetCount, sessionVolume, recentPRs,
 } from './stats.js';
 
-const FASE_TAG = { calentamiento: ' [CALENTAMIENTO]', enfriamiento: ' [VUELTA A LA CALMA]' };
+const FASE_TAG = { cardio: ' [CARDIO]', calentamiento: ' [CALENTAMIENTO]', enfriamiento: ' [VUELTA A LA CALMA]' };
 
 let samplePromise = null;
 export function getSample() {
@@ -237,12 +237,12 @@ ${fl ? `- Peso corporal: "peso" siempre null. Progresa con más repeticiones, m�
 - Incluye calentamiento de movilidad y cierre con estiramientos cuando quepa en el tiempo.
 - Pon en "nombre_freeletics" un nombre corto para guardar el workout en Freeletics (máximo 24 caracteres, sin fecha, en español, que diga el enfoque; p. ej. "Empuje y core 02"). No repitas estos nombres ya usados: ${freeleticsNames(sessions).join(', ') || 'ninguno'}.` : '- Progresión: si la última vez cumplió las repeticiones con RIR ≥2, sube la carga ~2.5-5%; si no, mantenla. Sugiere el peso en kg cuando haya historial; si no lo hay, deja peso en null.'}
 - La sesión debe caber en el tiempo disponible contando calentamiento y descansos.
-- El calentamiento y la vuelta a la calma también son ejercicios, con la misma forma que los del bloque: cada uno se muestra con su dibujo y su explicación. Elige del catálogo (movilidad, estiramientos, cardio o series ligeras de aproximación de un ejercicio del bloque). Cardio y estiramientos sostenidos van en "segundos" (5 min = 300) con "reps" null; normalmente 1 serie y "descansoSeg" 0. Para series de aproximación pon el peso ligero en "peso".
+${fl ? '' : '- En Forus la sesión empieza con "cardio" (elíptica, cinta o bicicleta del catálogo, normalmente 5-10 min, en "segundos"); después "calentamiento" de movilidad y series ligeras de aproximación. Si no hace falta cardio, deja "cardio" vacío.\n'}- El cardio, el calentamiento y la vuelta a la calma también son ejercicios, con la misma forma que los del bloque: cada uno se muestra con su dibujo y su explicación. Elige del catálogo (movilidad, estiramientos, cardio o series ligeras de aproximación de un ejercicio del bloque). Cardio y estiramientos sostenidos van en "segundos" (5 min = 300) con "reps" null; normalmente 1 serie y "descansoSeg" 0. Para series de aproximación pon el peso ligero en "peso".
 - Usa ejercicios del catálogo por su id. Solo si hace falta uno que no existe, ponlo en "nuevo" con exerciseId null.
 - Escribe en español, breve y directo.
 
 Responde SOLO con un JSON con esta forma exacta:
-{"titulo": "Torso — empuje y espalda",${fl ? ' "nombre_freeletics": "Empuje y core 02",' : ''} "enfoque": ["pecho","dorsales"], "razonamiento": "2-4 frases de por qué esta sesión hoy", "calentamiento": [{"exerciseId": "${fl ? 'fl-cat-cow' : 'eliptica'}", "nuevo": null, "series": ${fl ? 2 : 1}, "reps": ${fl ? '"10"' : 'null'}, "segundos": ${fl ? 'null' : 300}, "peso": null, "rir": null, "descansoSeg": ${fl ? 10 : 0}, "nota": "ritmo suave"}], "ejercicios": [{"exerciseId": "press-pecho-maquina", "nuevo": null, "series": 3, "reps": "8-10", "segundos": null, "peso": 40, "rir": 2, "descansoSeg": 90, "nota": "consejo corto"}], "vuelta_calma": [{"exerciseId": "...", "nuevo": null, "series": 1, "reps": null, "segundos": 30, "peso": null, "rir": null, "descansoSeg": 0, "nota": "..."}], "precauciones": ["..."]}
+{"titulo": "Torso — empuje y espalda",${fl ? ' "nombre_freeletics": "Empuje y core 02",' : ''} "enfoque": ["pecho","dorsales"], "razonamiento": "2-4 frases de por qué esta sesión hoy", "cardio": [${fl ? '' : '{"exerciseId": "eliptica", "nuevo": null, "series": 1, "reps": null, "segundos": 360, "peso": null, "rir": null, "descansoSeg": 0, "nota": "ritmo suave"}'}], "calentamiento": [{"exerciseId": "${fl ? 'fl-cat-cow' : 'fl-hip-circles'}", "nuevo": null, "series": ${fl ? 2 : 1}, "reps": "10", "segundos": null, "peso": null, "rir": null, "descansoSeg": ${fl ? 10 : 0}, "nota": "movilidad suave"}], "ejercicios": [{"exerciseId": "press-pecho-maquina", "nuevo": null, "series": 3, "reps": "8-10", "segundos": null, "peso": 40, "rir": 2, "descansoSeg": 90, "nota": "consejo corto"}], "vuelta_calma": [{"exerciseId": "...", "nuevo": null, "series": 1, "reps": null, "segundos": 30, "peso": null, "rir": null, "descansoSeg": 0, "nota": "..."}], "precauciones": ["..."]}
 Para un ejercicio nuevo: "exerciseId": null, "nuevo": {"name": "...", "primary": ["id_musculo"], "secondary": [], "equipment": "...", "knee": "ok|precaucion|evitar", "back": "ok|precaucion|evitar", "categoria": "fuerza|movilidad|cardio", "medida": "reps|tiempo"}. Ids de músculo válidos: ${MUSCLES.map((m) => m.id).join(', ')}.`;
 }
 
@@ -291,7 +291,9 @@ export async function extractMeasurements(files, hint, { signal } = {}) {
   const prompt = `Estas imágenes son capturas de un informe de medidas corporales (${hint || 'antropometría, báscula de bioimpedancia o Samsung Health/Samsung Watch'}).
 Extrae los valores numéricos que aparezcan. Usa estas claves cuando el dato corresponda:
 ${keys}
-Convierte a las unidades indicadas (lb→kg, in→cm). No inventes valores que no se vean.
+Fíjate en la unidad de cada dato y usa la clave que corresponde a esa unidad: "Músculo esquelético" en kg → musculoEsqueletico, en % → musculoEsqPct; "Agua corporal" en % → aguaPct, en kg o L → aguaKg; "Peso sin grasa" o "masa libre de grasa" → masaMagra; "Grasa subcutánea" o "índice de grasa subcutánea" → grasaSubcutanea; "Masa grasa" o "grasa corporal" en kg → masaGrasa; "TMB" o "tasa metabólica basal" → tmb; "Proteína" en % → proteinaPct.
+Copia el valor tal como aparece (no lo calcules a partir de otros). Convierte solo lb→kg e in→cm. No inventes valores que no se vean. Lo que no tenga clave (p. ej. "Tipo de cuerpo") va en "otros".
+"tipo": "reloj" si la captura es de Samsung Health / Galaxy Watch (composición corporal del reloj); "bioimpedancia" si es la app de una báscula; "antropometria" si es un informe con pliegues o perímetros.
 Responde SOLO con JSON: {"fecha": "AAAA-MM-DD o null", "tipo": "antropometria|bioimpedancia|reloj", "valores": {"peso": 78.4}, "otros": [{"nombre": "...", "valor": 1.2, "unidad": "..."}], "resumen": "1 frase de lo más relevante"}`;
   return sample.json(prompt + SPLIT_NOTE, { images: await prepareImages(files), modelTier: 'default', cache: false, signal });
 }
