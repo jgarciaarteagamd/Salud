@@ -77,7 +77,7 @@ function measurementsBlock(measurements, limit = 4) {
   return days.map((d) => {
     const vals = MEASURE_FIELDS.filter((f) => d.valores[f.key] != null).map((f) => `${f.label} ${d.valores[f.key]}${f.unit ? ` ${f.unit}` : ''} [${SOURCE_SHORT[d.fuente[f.key]] || d.fuente[f.key]}]`).join(', ');
     return `${d.date}: ${vals}`;
-  }).join('\n') + '\n(Grasa y músculo: el reloj es la referencia; la báscula no es comparable.)';
+  }).join('\n') + '\n(Grasa corporal, masa libre de grasa, metabolismo basal y músculo: el reloj es la referencia; peso e IMC, la báscula. Las dos no son comparables entre sí.)';
 }
 
 function nutritionBlock(nutrition) {
@@ -293,6 +293,7 @@ Extrae los valores numéricos que aparezcan. Usa estas claves cuando el dato cor
 ${keys}
 Fíjate en la unidad de cada dato y usa la clave que corresponde a esa unidad: "Músculo esquelético" en kg → musculoEsqueletico, en % → musculoEsqPct; "Agua corporal" en % → aguaPct, en kg o L → aguaKg; "Peso sin grasa" o "masa libre de grasa" → masaMagra; "Grasa subcutánea" o "índice de grasa subcutánea" → grasaSubcutanea; "Masa grasa" o "grasa corporal" en kg → masaGrasa; "TMB" o "tasa metabólica basal" → tmb; "Proteína" en % → proteinaPct.
 Copia el valor tal como aparece (no lo calcules a partir de otros). Convierte solo lb→kg e in→cm. No inventes valores que no se vean. Lo que no tenga clave (p. ej. "Tipo de cuerpo") va en "otros".
+En Samsung Health ("Tu composición corporal"), "Masa muscular" es la masa muscular esquelética: va en musculoEsqueletico, no en masaMuscular.
 "tipo": "reloj" si la captura es de Samsung Health / Galaxy Watch (composición corporal del reloj); "bioimpedancia" si es la app de una báscula; "antropometria" si es un informe con pliegues o perímetros.
 Responde SOLO con JSON: {"fecha": "AAAA-MM-DD o null", "tipo": "antropometria|bioimpedancia|reloj", "valores": {"peso": 78.4}, "otros": [{"nombre": "...", "valor": 1.2, "unidad": "..."}], "resumen": "1 frase de lo más relevante"}`;
   return sample.json(prompt + SPLIT_NOTE, { images: await prepareImages(files), modelTier: 'default', cache: false, signal });

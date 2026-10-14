@@ -182,7 +182,7 @@ function Measures({ list, open }) {
           <tbody>${used.map((u) => html`<tr><td>${u.label} <span class="xs muted">${u.unit}</span></td>${cols.map((d) => html`<td>${d.valores[u.key] != null ? html`${fmtNum(Number(d.valores[u.key]), 2)}${d.tipos.length > 1 ? html`<sup class="src">${(SOURCE_SHORT[d.fuente[u.key]] || '?')[0]}</sup>` : null}` : '—'}</td>`)}</tr>`)}</tbody>
         </table>
       </div>
-      <p class="xs muted">Los registros del mismo día se unen. Si un valor se repite, manda el reloj (R), luego la báscula (B) y la cinta (C). Toca una fecha para ver las capturas, corregir o eliminar.</p>
+      <p class="xs muted">Los registros del mismo día se unen. Si un valor se repite, manda el reloj (R), luego la báscula (B) y la cinta (C); el peso y el IMC se toman de la báscula. Toca una fecha para ver las capturas, corregir o eliminar.</p>
       ${pick && html`<${Sheet} title=${`Registros del ${fmtDay(pick.date)}`} onClose=${() => setPick(null)}>
         <div class="picker-list">${pick.entries.map((e) => html`<button class="pick" style="grid-template-columns:1fr auto" onClick=${() => { setPick(null); open({ entry: e }); }}>
           <div><b>${MEASURE_TYPES[e.tipo] || e.tipo}</b><div class="xs muted">${Object.keys(e.valores || {}).length} valores${e.notas ? ` · ${e.notas}` : ''}</div></div><${Icon} name="chevron" /></button>`)}</div>

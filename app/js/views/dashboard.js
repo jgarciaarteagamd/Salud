@@ -90,14 +90,14 @@ export function DashboardView({ go }) {
   const exById = Object.fromEntries(st.exercises.map((e) => [e.id, e]));
   const prs = useMemo(() => recentPRs(done, 5), [done]);
 
-  // Grasa y músculo de una sola fuente (el reloj si hay datos); mezclar báscula y reloj no es comparable.
+  // Cada dato de una sola fuente: peso de la báscula; grasa y músculo del reloj. Mezclarlas no es comparable.
   const bodyPts = (key, tipo) => {
     let rows = meas.filter((x) => x.valores?.[key] != null);
     if (tipo && rows.some((x) => x.tipo === tipo)) rows = rows.filter((x) => x.tipo === tipo);
     const byDay = new Map(); for (const x of rows) byDay.set(x.date, Number(x.valores[key]));
     return [...byDay.entries()].slice(-12).map(([d, y]) => ({ x: fmtShort(d), y }));
   };
-  const pesoPts = bodyPts('peso', 'reloj'); const grasaPts = bodyPts('grasaPct', 'reloj');
+  const pesoPts = bodyPts('peso', 'bioimpedancia'); const grasaPts = bodyPts('grasaPct', 'reloj');
   const muscKey = meas.some((x) => x.valores?.musculoEsqueletico != null) ? 'musculoEsqueletico' : 'masaMuscular';
   const muscPts = bodyPts(muscKey, 'reloj');
   const sortedMuscles = MUSCLES.map((x) => MUSCLE[x.id]).sort((a, b) => (week[b.id] / (b.max || 1)) - (week[a.id] / (a.max || 1)));

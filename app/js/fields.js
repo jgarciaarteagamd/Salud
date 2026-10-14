@@ -203,7 +203,14 @@ export const paceLabel = (a) => { const p = activityPace(a); return p == null ? 
 // el reloj (Samsung Health) es la referencia; luego báscula, cinta y registro manual.
 export const SOURCE_PRIORITY = ['reloj', 'bioimpedancia', 'antropometria', 'manual'];
 export const SOURCE_SHORT = { reloj: 'Reloj', bioimpedancia: 'Báscula', antropometria: 'Cinta', manual: 'Manual' };
-const rank = (t) => { const i = SOURCE_PRIORITY.indexOf(t); return i < 0 ? SOURCE_PRIORITY.length : i; };
+// Excepciones por dato: el peso y el IMC se toman de la báscula. El resto (grasa corporal, masa libre de grasa,
+// metabolismo basal…) sigue la prioridad general, con el reloj primero.
+export const FIELD_PRIORITY = {
+  peso: ['bioimpedancia', 'reloj', 'antropometria', 'manual'],
+  imc: ['bioimpedancia', 'reloj', 'antropometria', 'manual'],
+};
+const rankFor = (key, t) => { const order = FIELD_PRIORITY[key] || SOURCE_PRIORITY; const i = order.indexOf(t); return i < 0 ? order.length : i; };
+const rank = (t) => rankFor(null, t);
 
 // Une todos los registros de una misma fecha en uno. Devuelve, por fecha:
 // { date, valores, fuente: {clave: tipo}, tipos: [...], entries: [...] }, ordenado por fecha.
@@ -217,12 +224,13 @@ export function mergeMeasurementsByDate(list) {
   }
   for (const g of byDate.values()) {
     g.entries.sort((a, b) => rank(a.tipo) - rank(b.tipo));
-    for (const e of g.entries) {
-      if (!g.tipos.includes(e.tipo)) g.tipos.push(e.tipo);
-      for (const [k, v] of Object.entries(e.valores || {})) {
-        if (v == null || v === '' || k in g.valores) continue; // gana la fuente de mayor prioridad
-        g.valores[k] = v; g.fuente[k] = e.tipo;
-      }
+    for (const e of g.entries) if (!g.tipos.includes(e.tipo)) g.tipos.push(e.tipo);
+    // Por cada dato gana la fuente de mayor prioridad para ese dato.
+    const keys = new Set(g.entries.flatMap((e) => Object.keys(e.valores || {})));
+    for (const k of keys) {
+      const best = g.entries.filter((e) => e.valores?.[k] != null && e.valores[k] !== '')
+        .sort((a, b) => rankFor(k, a.tipo) - rankFor(k, b.tipo))[0];
+      if (best) { g.valores[k] = best.valores[k]; g.fuente[k] = best.tipo; }
     }
   }
   return [...byDate.values()].sort((a, b) => (a.date < b.date ? -1 : 1));
