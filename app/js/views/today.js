@@ -154,7 +154,7 @@ export function TodayView({ go }) {
       <button class="btn btn-xl btn-block" onClick=${() => setSheet('checkin-fl')} disabled=${!hasAI}><${Icon} name="spark" /> Sesión Freeletics en casa</button>
       ${!hasAI && html`<p class="small muted">Claude no está disponible en esta vista. Abre la app desde claude.ai para generar sesiones; mientras tanto puedes registrar una sesión libre.</p>`}
       <div class="row"><button class="btn grow" onClick=${() => startEmpty('forus')}><${Icon} name="plus" /> Libre en Forus</button><button class="btn grow" onClick=${() => startEmpty('freeletics')}><${Icon} name="plus" /> Libre en casa</button></div>
-      <button class="btn btn-block" onClick=${() => setSheet('cardio')}><${Icon} name="swim" /> Registrar natación o cardio</button>
+      <button class="btn btn-block" onClick=${() => setSheet('cardio')}><${Icon} name="swim" /> Registrar cardio</button>
       ${savedToday.length || cardioToday.length ? html`
         <section class="section">
           <span class="eyebrow">Ya guardaste hoy</span>

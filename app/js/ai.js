@@ -30,7 +30,7 @@ export function errorCopy(e) {
     case 'rate_limited': return 'Llegaste al límite de uso por ahora. Intenta en unos minutos.';
     case 'session_expired': return 'Tu sesión expiró. Vuelve a iniciar sesión en claude.ai.';
     case 'image_rejected': return 'La imagen no se pudo leer. Prueba con otra captura (JPG o PNG).';
-    case 'images_unavailable': return 'Esta vista no puede enviar imágenes a Claude. Llena los valores a mano.';
+    case 'images_unavailable': return 'Esta vista no deja enviar imágenes a Claude. Guarda la captura y léela desde claude.ai en el navegador, o escribe los valores.';
     case 'invalid_json': return 'La respuesta llegó incompleta. Toca “Intentar de nuevo”.';
     case 'refused': return 'Claude no pudo responder a esta solicitud. Ajusta las notas e intenta otra vez.';
     case 'prompt_too_large': return 'Hay demasiado historial para enviar. Avísame y lo resumimos.';

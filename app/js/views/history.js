@@ -43,7 +43,7 @@ export function HistoryView({ param, go }) {
         <button class="chip" aria-pressed=${m === 'cardio'} onClick=${() => setM(m === 'cardio' ? '' : 'cardio')}>Cardio</button>
         ${MUSCLES.map((mm) => html`<button class="chip" aria-pressed=${m === mm.id} onClick=${() => setM(m === mm.id ? '' : mm.id)}>${muscleShort(mm.id)}</button>`)}
       </div>
-      ${!list.length && html`<div class="empty"><p>${m === 'cardio' ? 'Aún no registras cardio. En Hoy toca “Registrar natación o cardio”.' : sessions.length ? 'Ninguna sesión trabajó ese músculo.' : 'Aún no hay sesiones guardadas. Configura la de hoy y al terminar toca “Guardar sesión”.'}</p>${!sessions.length && html`<button class="btn btn-primary" onClick=${() => go('hoy')}>Ir a Hoy</button>`}</div>`}
+      ${!list.length && html`<div class="empty"><p>${m === 'cardio' ? 'Aún no registras cardio. En Hoy toca “Registrar cardio”.' : sessions.length ? 'Ninguna sesión trabajó ese músculo.' : 'Aún no hay sesiones guardadas. Configura la de hoy y al terminar toca “Guardar sesión”.'}</p>${!sessions.length && html`<button class="btn btn-primary" onClick=${() => go('hoy')}>Ir a Hoy</button>`}</div>`}
       ${groups.map((g) => html`
         <div class="stack-sm">
           <div class="month">${g.label}</div>

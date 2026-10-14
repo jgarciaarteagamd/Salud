@@ -60,11 +60,13 @@ function WatchSheet({ value, existing, onSave, onDelete, onClose }) {
   const ctl = useRef(null);
   useEffect(() => { imageLimits().then(setImgCaps); }, []);
   // Captura guardada sin leer: se lee sola al abrirla en una vista que puede leer imágenes.
-  useEffect(() => { if (imgCaps && value?.pendiente && value?.imagenes?.length) read(); }, [imgCaps]);
+  useEffect(() => { if (value?.pendiente && value?.imagenes?.length) read(); }, []);
+  const tried = useRef(false);
   useEffect(() => { const u = files.map((f) => URL.createObjectURL(f)); setPreviews(u); return () => u.forEach((x) => URL.revokeObjectURL(x)); }, [files]);
   const saved = value?.imagenes || [];
 
   async function read(override) {
+    tried.current = true;
     setBusy('read'); setErr(''); ctl.current = new AbortController();
     try {
       const imgs = override || (files.length ? files : await blobsFromAssets(saved));
@@ -76,7 +78,7 @@ function WatchSheet({ value, existing, onSave, onDelete, onClose }) {
       setExtra({ actividad, hora: r?.hora || extra.hora, zonasFC: r?.zonasFC || extra.zonasFC, dispositivo: r?.dispositivo || extra.dispositivo });
       if (!parte) setParte(guessPart(actividad, existing, r?.hora || extra.hora));
       toast('Datos leídos: revísalos antes de guardar');
-    } catch (e) { setErr(e?.code === 'asset_fetch' ? 'No se pudo abrir la captura guardada. Vuelve a elegirla.' : errorCopy(e)); } finally { setBusy(''); }
+    } catch (e) { setErr(e?.code === 'asset_fetch' ? 'No se pudo abrir la captura guardada. Vuelve a elegirla.' : `${errorCopy(e)}${e?.code ? ` (código: ${e.code})` : ''}`); } finally { setBusy(''); }
   }
 
   async function save() {
@@ -84,7 +86,7 @@ function WatchSheet({ value, existing, onSave, onDelete, onClose }) {
     for (const f of FIELDS) { const n = num(vals[f.key]); if (n != null) out[f.key] = n; }
     const hasValues = FIELDS.some((f) => out[f.key] != null);
     // Si hay captura y Claude puede leerla, primero se lee y se revisa; luego se guarda.
-    if (!hasValues && imgCaps && (files.length || saved.length)) { await read(); return; }
+    if (!hasValues && !tried.current && (files.length || saved.length)) { await read(); return; }
     if (!hasValues && !files.length && !saved.length) { setErr('Elige la captura del reloj o escribe al menos la duración o las calorías.'); return; }
     setBusy('save');
     try {
@@ -100,17 +102,17 @@ function WatchSheet({ value, existing, onSave, onDelete, onClose }) {
     } catch { setErr('No se pudo guardar la captura. Intenta de nuevo.'); } finally { setBusy(''); }
   }
 
-  const canRead = imgCaps && (files.length || saved.length);
+  const canRead = files.length || saved.length;
   return html`
     <${Sheet} title=${value ? 'Registro del reloj' : 'Agregar registro del reloj'} onClose=${() => { ctl.current?.abort(); onClose(); }}>
       <div class="panel stack-sm">
-        <p class="small muted">Captura del resumen del entrenamiento en Samsung Health.${imgCaps ? ' Claude leerá los datos.' : ' En esta vista Claude no puede leer imágenes: guárdala y léela después desde el navegador, o escribe los valores.'}</p>
-        <${FilePick} id="w-files" count=${files.length} onPick=${(fl) => { const sel = fl.slice(0, imgCaps?.maxCount || 4); setFiles(sel); setErr(''); if (imgCaps && sel.length) read(sel); }} />
+        <p class="small muted">Captura del resumen del entrenamiento en Samsung Health. Claude la lee y rellena el formulario; revisa y guarda.</p>
+        <${FilePick} id="w-files" count=${files.length} onPick=${(fl) => { const sel = fl.slice(0, imgCaps?.maxCount || 4); setFiles(sel); setErr(''); if (sel.length) read(sel); }} />
         ${previews.length ? html`<div class="thumbs">${previews.map((u) => html`<img src=${u} alt="Captura seleccionada" />`)}</div>` : null}
         ${saved.length ? html`<div class="thumbs">${saved.map((id) => html`<img src=${assetUrl(id)} alt="Captura guardada" />`)}</div>` : null}
         ${canRead ? (busy === 'read'
           ? html`<div class="row"><${Thinking} text="Leyendo la captura…" /><button class="btn btn-sm" onClick=${() => ctl.current?.abort()}>Detener</button></div>`
-          : html`<button class="btn btn-primary" onClick=${read}><${Icon} name="spark" /> Leer con Claude</button>`) : null}
+          : html`<button class="btn btn-primary" onClick=${read}><${Icon} name="spark" /> Leer capturas</button>`) : null}
       </div>
       <div class="form-grid">
         <label class="field"><span>Parte de la sesión</span><select id="w-part" class="select" value=${parte} onChange=${(e) => setParte(e.target.value)}>
@@ -130,8 +132,38 @@ function WatchSheet({ value, existing, onSave, onDelete, onClose }) {
 
 const ORDER = { cardio: -1, calentamiento: 0, sesion: 1, bloque: 1, otro: 2, enfriamiento: 3 };
 
+// Lee varias capturas del reloj de una vez: cada captura es un registro (cardio, calentamiento, bloque…).
+async function readMany(files, list, onProgress) {
+  let next = [...list]; let failed = '';
+  for (let i = 0; i < files.length; i++) {
+    onProgress(i);
+    const rec = { imagenes: [] };
+    try { if (canUpload()) rec.imagenes.push(await uploadImage(files[i])); } catch { /* se guarda sin imagen */ }
+    try {
+      const r = await extractActivity([files[i]]);
+      Object.assign(rec, { actividad: r?.actividad || '', hora: r?.hora || '', zonasFC: r?.zonasFC || '', dispositivo: r?.dispositivo || '' });
+      for (const f of FIELDS) if (num(r?.valores?.[f.key]) != null) rec[f.key] = num(r.valores[f.key]);
+    } catch (e) { failed = `${errorCopy(e)}${e?.code ? ` (código: ${e.code})` : ''}`; }
+    if (!FIELDS.some((f) => rec[f.key] != null)) { if (!rec.imagenes.length) continue; rec.pendiente = true; }
+    rec.parte = guessPart(rec.actividad, next, rec.hora);
+    next = [...next, rec];
+  }
+  return { next, failed };
+}
+
 export function WatchPanel({ session, onSave }) {
   const [open, setOpen] = useState(null); // {index} | {index: -1} para uno nuevo
+  const [bulk, setBulk] = useState(null); // {i, total} mientras lee
+  const [bulkErr, setBulkErr] = useState('');
+  async function onBulk(files) {
+    if (!files.length) return;
+    setBulkErr(''); setBulk({ i: 0, total: files.length });
+    const { next, failed } = await readMany(files, list, (i) => setBulk({ i, total: files.length }));
+    setBulk(null);
+    if (next.length !== list.length) onSave(next);
+    if (failed) setBulkErr(failed);
+    else toast(`${next.length - list.length} ${next.length - list.length === 1 ? 'registro leído' : 'registros leídos'}: revísalos`);
+  }
   const list = watchRecords(session);
   const sorted = list.map((r, i) => ({ r, i })).sort((a, b) => (ORDER[a.r.parte] ?? 2) - (ORDER[b.r.parte] ?? 2) || (a.r.hora || '').localeCompare(b.r.hora || ''));
   const t = watchTotals(list);
@@ -140,8 +172,11 @@ export function WatchPanel({ session, onSave }) {
     <section class="panel stack-sm">
       <div class="row-between" style="flex-wrap:nowrap;gap:8px">
         <span class="eyebrow">Reloj${list.length > 1 ? ` · ${list.length} registros` : ''}</span>
-        <button class="btn btn-sm" onClick=${() => setOpen({ index: -1 })}><${Icon} name=${list.length ? 'plus' : 'camera'} size="16" /> ${list.length ? 'Agregar' : 'Subir resumen'}</button>
+        <button class="btn btn-sm btn-ghost" onClick=${() => setOpen({ index: -1 })}><${Icon} name="plus" size="16" /> A mano</button>
       </div>
+      ${bulk ? html`<${Thinking} text=${`Leyendo captura ${bulk.i + 1} de ${bulk.total}…`} />`
+        : html`<${FilePick} id="w-bulk" label="Leer capturas" primary onPick=${onBulk} />`}
+      ${bulkErr && html`<p class="small" style="color:var(--bad)">${bulkErr}</p>`}
       ${t ? html`
         <div class="watch-kpis">${FIELDS.filter((f) => t[f.key] != null).map((f) => html`
           <div><span class="xs muted">${f.label}${list.length > 1 ? (f.key === 'fcMax' ? '' : f.key === 'fcMedia' ? ' (prom.)' : ' (total)') : ''}</span><b class="num">${f.key === 'duracionMin' ? fmtClock(t[f.key] * 60) : fmtNum(t[f.key], 0)}</b>${f.key === 'duracionMin' ? null : html`<small class="muted"> ${f.unit}</small>`}</div>`)}</div>` : null}
@@ -151,7 +186,7 @@ export function WatchPanel({ session, onSave }) {
             <span class="xs muted num">${r.pendiente ? 'Captura guardada sin leer: tócala para leerla con Claude' : `${r.hora ? `${r.hora} · ` : ''}${summary(r)}`}</span></span>
           <${Icon} name="chevron" />
         </button>`)}</div>`
-      : html`<p class="small muted">Al terminar, sube las capturas del resumen de tu Galaxy Watch. Si registraste calentamiento, bloque y vuelta a la calma por separado, agrega cada una.</p>`}
+      : html`<p class="small muted">Al terminar, elige las capturas del resumen de tu Galaxy Watch (puedes elegir varias a la vez: cardio, calentamiento, bloque y vuelta a la calma). Claude crea un registro por captura.</p>`}
       ${open && html`<${WatchSheet} value=${open.index >= 0 ? list[open.index] : null} existing=${list.filter((_, j) => j !== open.index)}
         onSave=${(r) => save(open.index >= 0 ? list.map((x, j) => (j === open.index ? r : x)) : [...list, r])}
         onDelete=${() => save(list.filter((_, j) => j !== open.index))}
