@@ -35,7 +35,7 @@ export function errorCopy(e) {
     case 'refused': return 'Claude no pudo responder a esta solicitud. Ajusta las notas e intenta otra vez.';
     case 'prompt_too_large': return 'Hay demasiado historial para enviar. Avísame y lo resumimos.';
     case 'cancelled': return '';
-    default: return 'No se pudo conectar con Claude. Intenta de nuevo.';
+    default: return `No se pudo conectar con Claude. Intenta de nuevo.${e?.message && !e?.code ? ` (${String(e.message).slice(0, 80)})` : ''}`;
   }
 }
 
