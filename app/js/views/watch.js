@@ -1,8 +1,10 @@
-// Datos del reloj para una sesión de Forus o Freeletics. Una sesión puede tener varios registros del
-// Galaxy Watch (p. ej. "Estiramientos" al calentar, "Máquinas de musculación" en el bloque y "Estiramientos"
-// al final): cada uno con duración, calorías, frecuencia cardiaca y zonas, leídos de la captura de Samsung Health.
+// Datos del reloj para una sesión de Forus o Freeletics. Una sesión puede tener varios registros del reloj
+// (p. ej. "Elíptica", "Ejercicios de fuerza con máquinas" y "Enfriamiento"): cada uno con duración y calorías.
+// Vienen de la pantalla "Datos de Entrenos" de la app Salud del iPhone, que muestra todos los entrenos del día
+// en una sola captura y la FC mínima y máxima solo del último. Los registros antiguos (Samsung Health)
+// traen además FC media y zonas.
 import { uploadImage, canUpload, assetUrl, blobsFromAssets } from '../store.js';
-import { extractActivity, imageLimits, errorCopy } from '../ai.js';
+import { extractWorkouts, imageLimits, errorCopy } from '../ai.js';
 import { fmtClock } from '../fields.js';
 import { fmtNum, num } from '../stats.js';
 import { Icon, Sheet, Thinking, toast, FilePick } from '../ui.js';
@@ -11,8 +13,9 @@ const { html, useState, useEffect, useRef } = window.htmPreact;
 const FIELDS = [
   { key: 'duracionMin', label: 'Duración', unit: 'min' },
   { key: 'kcal', label: 'Calorías', unit: 'kcal' },
-  { key: 'fcMedia', label: 'FC media', unit: 'lpm' },
+  { key: 'fcMin', label: 'FC mínima', unit: 'lpm' },
   { key: 'fcMax', label: 'FC máxima', unit: 'lpm' },
+  { key: 'fcMedia', label: 'FC media', unit: 'lpm' },
 ];
 export const WATCH_PARTS = {
   cardio: 'Cardio (elíptica, cinta…)', calentamiento: 'Calentamiento', bloque: 'Bloque principal', enfriamiento: 'Vuelta a la calma', sesion: 'Toda la sesión', otro: 'Otro',
@@ -29,10 +32,12 @@ export function watchTotals(list) {
   const wFc = rows.filter((r) => num(r.fcMedia) && num(r.duracionMin));
   const fcMedia = wFc.length ? wFc.reduce((t, r) => t + r.fcMedia * r.duracionMin, 0) / wFc.reduce((t, r) => t + r.duracionMin, 0) : null;
   const fcMax = Math.max(0, ...rows.map((r) => num(r.fcMax) || 0)) || null;
-  return { duracionMin: dur || null, kcal: kcal || null, fcMedia, fcMax };
+  const mins = rows.map((r) => num(r.fcMin)).filter((x) => x);
+  return { duracionMin: dur || null, kcal: kcal || null, fcMin: mins.length ? Math.min(...mins) : null, fcMax, fcMedia };
 }
 
-const summary = (r) => [r.duracionMin && fmtClock(r.duracionMin * 60), r.kcal && `${fmtNum(r.kcal, 0)} kcal`, r.fcMedia && `FC ${fmtNum(r.fcMedia, 0)}`, r.fcMax && `máx ${fmtNum(r.fcMax, 0)}`].filter(Boolean).join(' · ');
+const summary = (r) => [r.duracionMin && fmtClock(r.duracionMin * 60), r.kcal && `${fmtNum(r.kcal, 0)} kcal`,
+  r.fcMedia && `FC ${fmtNum(r.fcMedia, 0)}`, r.fcMin && r.fcMax ? `FC ${fmtNum(r.fcMin, 0)}–${fmtNum(r.fcMax, 0)}` : r.fcMax && `máx ${fmtNum(r.fcMax, 0)}`].filter(Boolean).join(' · ');
 export function watchSummary(session) {
   const list = watchRecords(session); const t = watchTotals(list);
   if (!t) return list.length ? 'captura sin leer' : '';
@@ -45,12 +50,42 @@ function guessPart(actividad, existing, hora) {
   const block = existing.find((r) => r.parte === 'bloque' || r.parte === 'sesion');
   const before = block?.hora && hora ? hora < block.hora : !block;
   if (/el[ií]ptica|caminata|bicicleta|cinta|remo|escaladora|correr|carrera/.test(a)) return 'cardio';
-  if (/estiramiento|movilidad|yoga/.test(a)) return before ? 'calentamiento' : 'enfriamiento';
+  if (/enfriamiento|vuelta a la calma/.test(a)) return 'enfriamiento';
+  if (/calentamiento/.test(a)) return 'calentamiento';
+  if (/estiramiento|movilidad|flexibilidad|yoga/.test(a)) return before ? 'calentamiento' : 'enfriamiento';
   if (/m[aá]quinas|musculaci|pesas|fuerza|circuito/.test(a)) return existing.length ? 'bloque' : 'sesion';
   return existing.length ? 'otro' : 'sesion';
 }
 
-function WatchSheet({ value, existing, onSave, onDelete, onClose }) {
+// Un entreno leído de la captura → registro de la sesión.
+function toRecord(e) {
+  const rec = { actividad: e?.actividad || '', hora: /^\d{1,2}:\d{2}$/.test(e?.hora || '') ? e.hora.padStart(5, '0') : '', zonasFC: e?.zonasFC || '' };
+  for (const f of FIELDS) if (num(e?.[f.key]) != null) rec[f.key] = num(e[f.key]);
+  return rec;
+}
+const sameWorkout = (a, b) => (a.actividad || '').toLowerCase() === (b.actividad || '').toLowerCase()
+  && Math.round(num(a.duracionMin) || 0) === Math.round(num(b.duracionMin) || 0);
+
+// Suma los entrenos leídos a la lista. Si un entreno ya estaba (otra captura de la misma pantalla),
+// solo completa los datos que le faltaban, como la FC del último entreno.
+function mergeWorkouts(list, recs, imagenes, dispositivo) {
+  let next = [...list]; let added = 0;
+  for (const r of recs) {
+    if (!FIELDS.some((f) => r[f.key] != null)) continue;
+    const i = next.findIndex((x) => !x.pendiente && sameWorkout(x, r));
+    if (i >= 0) {
+      const cur = next[i]; const upd = { ...cur };
+      for (const [k, v] of Object.entries(r)) if (v !== '' && v != null && (cur[k] == null || cur[k] === '')) upd[k] = v;
+      next = next.map((x, j) => (j === i ? upd : x));
+      continue;
+    }
+    next = [...next, { ...r, dispositivo: dispositivo || '', imagenes: [...imagenes], parte: guessPart(r.actividad, next, r.hora) }];
+    added++;
+  }
+  return { next, added };
+}
+
+function WatchSheet({ value, existing, onSave, onReplace, onDelete, onClose }) {
   const [vals, setVals] = useState(() => Object.fromEntries(FIELDS.map((f) => [f.key, value?.[f.key] != null ? String(value[f.key]) : ''])));
   const [extra, setExtra] = useState({ actividad: value?.actividad || '', hora: value?.hora || '', zonasFC: value?.zonasFC || '', dispositivo: value?.dispositivo || '' });
   const [parte, setParte] = useState(value?.parte || '');
@@ -70,14 +105,30 @@ function WatchSheet({ value, existing, onSave, onDelete, onClose }) {
     setBusy('read'); setErr(''); ctl.current = new AbortController();
     try {
       const imgs = override || (files.length ? files : await blobsFromAssets(saved));
-      const r = await extractActivity(imgs, { signal: ctl.current.signal });
+      const res = await extractWorkouts(imgs, { signal: ctl.current.signal });
+      const recs = (res?.entrenos || []).map(toRecord).filter((r) => FIELDS.some((f) => r[f.key] != null));
+      if (!recs.length) { setErr('No se encontraron entrenos en la captura. Escribe los valores a mano.'); return; }
+      const empty = !FIELDS.some((f) => num(vals[f.key]) != null);
+      // Varios entrenos en la captura (la pantalla "Datos de Entrenos"): uno por registro.
+      if (recs.length > 1 && empty && onReplace) {
+        const imagenes = [...saved];
+        if (files.length && canUpload()) for (const f of files) imagenes.push(await uploadImage(f));
+        const { next, added } = mergeWorkouts(existing, recs, imagenes, res?.dispositivo);
+        onReplace(next);
+        toast(`${added} ${added === 1 ? 'registro leído' : 'registros leídos'}: revísalos`);
+        onClose();
+        return;
+      }
+      // Un solo registro: el entreno con el mismo nombre o, si no, el primero.
+      const want = (extra.actividad || '').toLowerCase();
+      const r = recs.find((x) => want && x.actividad.toLowerCase() === want) || recs[0];
       const next = { ...vals };
-      for (const f of FIELDS) if (num(r?.valores?.[f.key]) != null) next[f.key] = String(num(r.valores[f.key]));
+      for (const f of FIELDS) if (r[f.key] != null) next[f.key] = String(r[f.key]);
       setVals(next);
-      const actividad = r?.actividad || extra.actividad;
-      setExtra({ actividad, hora: r?.hora || extra.hora, zonasFC: r?.zonasFC || extra.zonasFC, dispositivo: r?.dispositivo || extra.dispositivo });
-      if (!parte) setParte(guessPart(actividad, existing, r?.hora || extra.hora));
-      toast('Datos leídos: revísalos antes de guardar');
+      const actividad = r.actividad || extra.actividad;
+      setExtra({ actividad, hora: r.hora || extra.hora, zonasFC: r.zonasFC || extra.zonasFC, dispositivo: res?.dispositivo || extra.dispositivo });
+      if (!parte) setParte(guessPart(actividad, existing, r.hora || extra.hora));
+      toast(recs.length > 1 ? `La captura tiene ${recs.length} entrenos: se tomó ${actividad || 'el primero'}` : 'Datos leídos: revísalos antes de guardar');
     } catch (e) { setErr(e?.code === 'asset_fetch' ? 'No se pudo abrir la captura guardada. Vuelve a elegirla.' : `${errorCopy(e)}${e?.code ? ` (código: ${e.code})` : ''}`); } finally { setBusy(''); }
   }
 
@@ -106,7 +157,7 @@ function WatchSheet({ value, existing, onSave, onDelete, onClose }) {
   return html`
     <${Sheet} title=${value ? 'Registro del reloj' : 'Agregar registro del reloj'} onClose=${() => { ctl.current?.abort(); onClose(); }}>
       <div class="panel stack-sm">
-        <p class="small muted">Captura del resumen del entrenamiento en Samsung Health. Claude la lee y rellena el formulario; revisa y guarda.</p>
+        <p class="small muted">Captura de “Datos de Entrenos” en la app Salud del iPhone. Claude la lee y rellena el formulario; revisa y guarda. Si trae varios entrenos, crea un registro por cada uno.</p>
         <${FilePick} id="w-files" count=${files.length} onPick=${(fl) => { const sel = fl.slice(0, imgCaps?.maxCount || 4); setFiles(sel); setErr(''); if (sel.length) read(sel); }} />
         ${previews.length ? html`<div class="thumbs">${previews.map((u) => html`<img src=${u} alt="Captura seleccionada" />`)}</div>` : null}
         ${saved.length ? html`<div class="thumbs">${saved.map((id) => html`<img src=${assetUrl(id)} alt="Captura guardada" />`)}</div>` : null}
@@ -121,7 +172,8 @@ function WatchSheet({ value, existing, onSave, onDelete, onClose }) {
         <label class="field"><span>Hora de inicio</span><input id="w-time" type="time" class="input" value=${extra.hora} onInput=${(e) => setExtra({ ...extra, hora: e.target.value })} /></label>
         ${FIELDS.map((f) => html`<label class="field"><span>${f.label} (${f.unit})</span><input id=${'w-' + f.key} class="input num" inputmode="decimal" value=${vals[f.key]} onInput=${(e) => setVals({ ...vals, [f.key]: e.target.value })} /></label>`)}
       </div>
-      <label class="field"><span>Zonas de FC</span><input id="w-zones" class="input" placeholder="Casi todo en zona 1, picos en zona 2" value=${extra.zonasFC} onInput=${(e) => setExtra({ ...extra, zonasFC: e.target.value })} /></label>
+      ${extra.zonasFC || value?.zonasFC ? html`<label class="field"><span>Zonas de FC</span><input id="w-zones" class="input" value=${extra.zonasFC} onInput=${(e) => setExtra({ ...extra, zonasFC: e.target.value })} /></label>` : null}
+      <p class="xs muted">La app Salud muestra la FC mínima y máxima solo del último entreno. Si quieres la de cada parte, haz la captura al terminar cada una.</p>
       ${err && html`<p class="small" style="color:var(--bad)">${err}</p>`}
       <div class="row">
         <button class="btn btn-primary" disabled=${busy === 'save'} onClick=${save}>${busy === 'save' ? 'Guardando…' : 'Guardar'}</button>
@@ -132,23 +184,26 @@ function WatchSheet({ value, existing, onSave, onDelete, onClose }) {
 
 const ORDER = { cardio: -1, calentamiento: 0, sesion: 1, bloque: 1, otro: 2, enfriamiento: 3 };
 
-// Lee varias capturas del reloj de una vez: cada captura es un registro (cardio, calentamiento, bloque…).
+// Lee varias capturas del reloj de una vez. Cada captura puede traer varios entrenos (cardio, fuerza,
+// enfriamiento…): cada entreno es un registro.
 async function readMany(files, list, onProgress) {
-  let next = [...list]; let failed = '';
+  let next = [...list]; let failed = ''; let added = 0;
   for (let i = 0; i < files.length; i++) {
     onProgress(i);
-    const rec = { imagenes: [] };
-    try { if (canUpload()) rec.imagenes.push(await uploadImage(files[i])); } catch { /* se guarda sin imagen */ }
+    const imagenes = [];
+    try { if (canUpload()) imagenes.push(await uploadImage(files[i])); } catch { /* se guarda sin imagen */ }
+    let recs = []; let dispositivo = '';
     try {
-      const r = await extractActivity([files[i]]);
-      Object.assign(rec, { actividad: r?.actividad || '', hora: r?.hora || '', zonasFC: r?.zonasFC || '', dispositivo: r?.dispositivo || '' });
-      for (const f of FIELDS) if (num(r?.valores?.[f.key]) != null) rec[f.key] = num(r.valores[f.key]);
+      const r = await extractWorkouts([files[i]]);
+      recs = (r?.entrenos || []).map(toRecord); dispositivo = r?.dispositivo || '';
     } catch (e) { failed = `${errorCopy(e)}${e?.code ? ` (código: ${e.code})` : ''}`; }
-    if (!FIELDS.some((f) => rec[f.key] != null)) { if (!rec.imagenes.length) continue; rec.pendiente = true; }
-    rec.parte = guessPart(rec.actividad, next, rec.hora);
-    next = [...next, rec];
+    const m = mergeWorkouts(next, recs, imagenes, dispositivo);
+    if (!m.added && !recs.some((r) => FIELDS.some((f) => r[f.key] != null)) && imagenes.length) {
+      next = [...next, { imagenes, pendiente: true, parte: guessPart('', next, '') }]; added++; continue;
+    }
+    next = m.next; added += m.added;
   }
-  return { next, failed };
+  return { next, failed, added };
 }
 
 export function WatchPanel({ session, onSave }) {
@@ -158,11 +213,11 @@ export function WatchPanel({ session, onSave }) {
   async function onBulk(files) {
     if (!files.length) return;
     setBulkErr(''); setBulk({ i: 0, total: files.length });
-    const { next, failed } = await readMany(files, list, (i) => setBulk({ i, total: files.length }));
+    const { next, failed, added } = await readMany(files, list, (i) => setBulk({ i, total: files.length }));
     setBulk(null);
-    if (next.length !== list.length) onSave(next);
+    if (JSON.stringify(next) !== JSON.stringify(list)) onSave(next);
     if (failed) setBulkErr(failed);
-    else toast(`${next.length - list.length} ${next.length - list.length === 1 ? 'registro leído' : 'registros leídos'}: revísalos`);
+    else toast(added ? `${added} ${added === 1 ? 'registro leído' : 'registros leídos'}: revísalos` : 'Datos del reloj actualizados');
   }
   const list = watchRecords(session);
   const sorted = list.map((r, i) => ({ r, i })).sort((a, b) => (ORDER[a.r.parte] ?? 2) - (ORDER[b.r.parte] ?? 2) || (a.r.hora || '').localeCompare(b.r.hora || ''));
@@ -179,16 +234,17 @@ export function WatchPanel({ session, onSave }) {
       ${bulkErr && html`<p class="small" style="color:var(--bad)">${bulkErr}</p>`}
       ${t ? html`
         <div class="watch-kpis">${FIELDS.filter((f) => t[f.key] != null).map((f) => html`
-          <div><span class="xs muted">${f.label}${list.length > 1 ? (f.key === 'fcMax' ? '' : f.key === 'fcMedia' ? ' (prom.)' : ' (total)') : ''}</span><b class="num">${f.key === 'duracionMin' ? fmtClock(t[f.key] * 60) : fmtNum(t[f.key], 0)}</b>${f.key === 'duracionMin' ? null : html`<small class="muted"> ${f.unit}</small>`}</div>`)}</div>` : null}
+          <div><span class="xs muted">${f.label}${list.length > 1 ? (f.key === 'fcMax' || f.key === 'fcMin' ? '' : f.key === 'fcMedia' ? ' (prom.)' : ' (total)') : ''}</span><b class="num">${f.key === 'duracionMin' ? fmtClock(t[f.key] * 60) : fmtNum(t[f.key], 0)}</b>${f.key === 'duracionMin' ? null : html`<small class="muted"> ${f.unit}</small>`}</div>`)}</div>` : null}
       ${list.length ? html`<div class="mlist">${sorted.map(({ r, i }) => html`
         <button class="mrow" style="grid-template-columns:1fr auto" onClick=${() => setOpen({ index: i })}>
           <span><span class="name">${WATCH_PARTS[r.parte] || 'Registro'}${r.actividad ? ` · ${r.actividad}` : ''}</span><br />
             <span class="xs muted num">${r.pendiente ? 'Captura guardada sin leer: tócala para leerla con Claude' : `${r.hora ? `${r.hora} · ` : ''}${summary(r)}`}</span></span>
           <${Icon} name="chevron" />
         </button>`)}</div>`
-      : html`<p class="small muted">Al terminar, elige las capturas del resumen de tu Galaxy Watch (puedes elegir varias a la vez: cardio, calentamiento, bloque y vuelta a la calma). Claude crea un registro por captura.</p>`}
+      : html`<p class="small muted">Al terminar, abre la app Salud del iPhone → “Datos de Entrenos” y elige la captura. Claude crea un registro por cada entreno (elíptica, fuerza, enfriamiento…) y le pone la FC al último.</p>`}
       ${open && html`<${WatchSheet} value=${open.index >= 0 ? list[open.index] : null} existing=${list.filter((_, j) => j !== open.index)}
         onSave=${(r) => save(open.index >= 0 ? list.map((x, j) => (j === open.index ? r : x)) : [...list, r])}
+        onReplace=${(rest) => save(rest)}
         onDelete=${() => save(list.filter((_, j) => j !== open.index))}
         onClose=${() => setOpen(null)} />`}
     </section>`;

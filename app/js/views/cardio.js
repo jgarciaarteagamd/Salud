@@ -1,5 +1,5 @@
 // Cardio y otras actividades (natación, caminata, bicicleta…): se registran desde la captura de
-// Samsung Health que Claude lee, o a mano. No suman series de fuerza, pero el plan las tiene en cuenta.
+// la app Salud del iPhone (Apple Watch) que Claude lee, o a mano. No suman series de fuerza, pero el plan las tiene en cuenta.
 import { saveDoc, deleteDoc, newId, uploadImage, canUpload, assetUrl, blobsFromAssets } from '../store.js';
 import { ACTIVITY_TYPES, ACTIVITY_FIELDS, paceLabel, fmtClock } from '../fields.js';
 import { extractActivity, imageLimits, errorCopy } from '../ai.js';
@@ -8,11 +8,11 @@ import { Icon, Sheet, Thinking, Confirm, toast, FilePick } from '../ui.js';
 const { html, useState, useEffect, useRef } = window.htmPreact;
 
 const SHOWN = {
-  natacion: ['distancia', 'duracionMin', 'activoMin', 'fcMedia', 'fcMax', 'kcal', 'brazadas', 'swolf', 'largoPiscina'],
-  caminata: ['distancia', 'duracionMin', 'activoMin', 'fcMedia', 'fcMax', 'kcal', 'pasos'],
-  carrera: ['distancia', 'duracionMin', 'activoMin', 'fcMedia', 'fcMax', 'kcal', 'pasos'],
+  natacion: ['distancia', 'duracionMin', 'activoMin', 'fcMin', 'fcMax', 'fcMedia', 'kcal', 'brazadas', 'swolf', 'largoPiscina'],
+  caminata: ['distancia', 'duracionMin', 'activoMin', 'fcMin', 'fcMax', 'fcMedia', 'kcal', 'pasos'],
+  carrera: ['distancia', 'duracionMin', 'activoMin', 'fcMin', 'fcMax', 'fcMedia', 'kcal', 'pasos'],
 };
-const fieldsFor = (tipo) => { const keys = SHOWN[tipo] || ['distancia', 'duracionMin', 'activoMin', 'fcMedia', 'fcMax', 'kcal']; return ACTIVITY_FIELDS.filter((f) => keys.includes(f.key)); };
+const fieldsFor = (tipo) => { const keys = SHOWN[tipo] || ['duracionMin', 'kcal', 'fcMin', 'fcMax', 'fcMedia', 'distancia', 'activoMin']; return keys.map((k) => ACTIVITY_FIELDS.find((f) => f.key === k)); };
 
 export function activityTitle(a) {
   const d = num(a.valores?.distancia);
@@ -21,7 +21,8 @@ export function activityTitle(a) {
 export function activitySubtitle(a) {
   if (a.pendiente) return 'Captura sin leer: ábrela y toca “Leer con Claude”';
   const v = a.valores || {};
-  return [v.duracionMin && fmtClock(v.duracionMin * 60), paceLabel(a), v.fcMedia && `${fmtNum(v.fcMedia, 0)} lpm`, v.kcal && `${fmtNum(v.kcal, 0)} kcal`].filter(Boolean).join(' · ');
+  const fc = v.fcMedia ? `${fmtNum(v.fcMedia, 0)} lpm` : v.fcMin && v.fcMax ? `FC ${fmtNum(v.fcMin, 0)}–${fmtNum(v.fcMax, 0)}` : null;
+  return [v.duracionMin && fmtClock(v.duracionMin * 60), paceLabel(a), fc, v.kcal && `${fmtNum(v.kcal, 0)} kcal`].filter(Boolean).join(' · ');
 }
 
 export function ActivitySheet({ entry, onClose }) {
@@ -102,8 +103,8 @@ export function ActivitySheet({ entry, onClose }) {
       </div>
 
       <div class="panel stack-sm">
-        <span class="eyebrow">Capturas de Samsung Health</span>
-        <p class="small muted">Sube el resumen del ejercicio y, si quieres, la pantalla de largos o vueltas. Claude la lee y rellena el formulario; revisa y guarda.</p>
+        <span class="eyebrow">Capturas de la app Salud</span>
+        <p class="small muted">Sube “Datos de Entrenos” de la app Salud del iPhone (o el resumen del entreno en la app Fitness, si tiene distancia o largos). Claude la lee y rellena el formulario; revisa y guarda.</p>
         <${FilePick} id="ac-files" count=${files.length} onPick=${(fl) => { const sel = fl.slice(0, imgCaps?.maxCount || 6); setFiles(sel); setErr(''); if (sel.length) read(sel); }} />
         ${previews.length ? html`<div class="thumbs">${previews.map((u) => html`<img src=${u} alt="Captura seleccionada" />`)}</div>` : null}
         ${entry?.imagenes?.length ? html`<div class="thumbs">${entry.imagenes.map((id) => html`<img src=${assetUrl(id)} alt="Captura guardada" />`)}</div>` : null}
@@ -137,7 +138,7 @@ export function ActivitySheet({ entry, onClose }) {
 
       <div class="form-grid">
         <label class="field"><span>Zonas de FC</span><input id="ac-zones" class="input" placeholder="Casi todo en zona 1-2" value=${extra.zonasFC} onInput=${(e) => setExtra({ ...extra, zonasFC: e.target.value })} /></label>
-        <label class="field"><span>Dispositivo</span><input id="ac-device" class="input" placeholder="Galaxy Watch6" value=${extra.dispositivo} onInput=${(e) => setExtra({ ...extra, dispositivo: e.target.value })} /></label>
+        <label class="field"><span>Dispositivo</span><input id="ac-device" class="input" placeholder="Apple Watch" value=${extra.dispositivo} onInput=${(e) => setExtra({ ...extra, dispositivo: e.target.value })} /></label>
       </div>
       <label class="field"><span>Notas (cómo te sentiste, rodilla, espalda, hombros)</span><textarea id="ac-notes" class="textarea" style="min-height:64px" value=${notas} onInput=${(e) => setNotas(e.target.value)}></textarea></label>
       ${err && html`<p class="small" style="color:var(--bad)">${err}</p>`}

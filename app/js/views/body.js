@@ -1,8 +1,8 @@
-// Cuerpo: medidas (antropometría, bioimpedancia, Samsung Watch) y nutrición (Fitia).
+// Cuerpo: medidas (antropometría, báscula de bioimpedancia; Samsung Watch solo en el historial) y nutrición (Fitia).
 // Cada registro se crea desde capturas que Claude lee, o a mano; siempre se revisa antes de guardar.
 import { useStore, saveDoc, deleteDoc, newId, uploadImage, canUpload, assetUrl, blobsFromAssets } from '../store.js';
 import {
-  MEASURE_GROUPS, MEASURE_FIELDS, MEASURE_TYPES, NUTRITION_FIELDS, NUTRITION_GROUPS, WEEKLY_GROUPS, WEEKLY_FIELDS, isWeekly,
+  MEASURE_GROUPS, MEASURE_FIELDS, MEASURE_TYPES, MEASURE_TYPES_NEW, NUTRITION_FIELDS, NUTRITION_GROUPS, WEEKLY_GROUPS, WEEKLY_FIELDS, isWeekly,
   NUTRITION_FIELD, FOOD_QUALITY, metaOf,
   mergeMeasurementsByDate, SOURCE_SHORT,
 } from '../fields.js';
@@ -107,12 +107,12 @@ function EntrySheet({ kind, entry, weekly, onClose }) {
       <div class="form-grid">
         <label class="field"><span>${isWeek ? 'Desde' : 'Fecha'}</span><input id="en-date" type="date" class="input" value=${date} onInput=${(e) => setDate(e.target.value)} /></label>
         ${isWeek && html`<label class="field"><span>Hasta</span><input id="en-date-end" type="date" class="input" value=${dateEnd} onInput=${(e) => setDateEnd(e.target.value)} /></label>`}
-        ${!isNut && html`<label class="field"><span>Fuente</span><select id="en-type" class="select" value=${tipo} onChange=${(e) => setTipo(e.target.value)}>${Object.entries(MEASURE_TYPES).map(([k, v]) => html`<option value=${k}>${v}</option>`)}</select></label>`}
+        ${!isNut && html`<label class="field"><span>Fuente</span><select id="en-type" class="select" value=${tipo} onChange=${(e) => setTipo(e.target.value)}>${Object.entries(MEASURE_TYPES).filter(([k]) => MEASURE_TYPES_NEW.includes(k) || entry?.tipo === k).map(([k, v]) => html`<option value=${k}>${v}</option>`)}</select></label>`}
       </div>
 
       <div class="panel stack-sm">
         <span class="eyebrow">Capturas</span>
-        <p class="small muted">${isWeek ? 'Captura del “Score nutricional” de la semana en Fitia (puedes subir varias pantallas).' : isNut ? 'Captura del resumen del día en Fitia.' : 'Informe de antropometría, app de la báscula o Samsung Health.'} Claude la lee y rellena el formulario; revisa y guarda.</p>
+        <p class="small muted">${isWeek ? 'Captura del “Score nutricional” de la semana en Fitia (puedes subir varias pantallas).' : isNut ? 'Captura del resumen del día en Fitia.' : 'App de la báscula o informe de antropometría.'} Claude la lee y rellena el formulario; revisa y guarda.</p>
         <${FilePick} id="en-files" count=${files.length} onPick=${(fl) => { const sel = fl.slice(0, imgCaps?.maxCount || 6); setFiles(sel); setErr(''); if (sel.length) read(sel); }} />
         ${previews.length ? html`<div class="thumbs">${previews.map((u) => html`<img src=${u} alt="Captura seleccionada" />`)}</div>` : null}
         ${entry?.imagenes?.length ? html`<div class="thumbs">${entry.imagenes.map((id) => html`<img src=${assetUrl(id)} alt="Captura guardada" />`)}</div>` : null}
@@ -168,7 +168,7 @@ function Measures({ list, open }) {
   const f = MEASURE_FIELDS.find((x) => x.key === metric);
   const openDay = (d) => (d.entries.length === 1 ? open({ entry: d.entries[0] }) : setPick(d));
 
-  if (!list.length) return html`<div class="empty"><p>Sin medidas todavía. Sube una captura de tu antropometría, de la báscula o de Samsung Health.</p><button class="btn btn-primary" onClick=${() => open({})}><${Icon} name="camera" /> Subir captura</button></div>`;
+  if (!list.length) return html`<div class="empty"><p>Sin medidas todavía. Sube una captura de la báscula o de tu antropometría.</p><button class="btn btn-primary" onClick=${() => open({})}><${Icon} name="camera" /> Subir captura</button></div>`;
   return html`
     <div class="stack">
       <${Pending} list=${list} open=${open} />
@@ -184,7 +184,7 @@ function Measures({ list, open }) {
           <tbody>${used.map((u) => html`<tr><td>${u.label} <span class="xs muted">${u.unit}</span></td>${cols.map((d) => html`<td>${d.valores[u.key] != null ? html`${fmtNum(Number(d.valores[u.key]), 2)}${d.tipos.length > 1 ? html`<sup class="src">${(SOURCE_SHORT[d.fuente[u.key]] || '?')[0]}</sup>` : null}` : '—'}</td>`)}</tr>`)}</tbody>
         </table>
       </div>
-      <p class="xs muted">Los registros del mismo día se unen. Si un valor se repite, manda el reloj (R), luego la báscula (B) y la cinta (C); el peso y el IMC se toman de la báscula. Toca una fecha para ver las capturas, corregir o eliminar.</p>
+      <p class="xs muted">Los registros del mismo día se unen. Si un valor se repite, manda la báscula (B), luego la cinta (C). Los registros del Samsung Watch (R) quedan como historial: su grasa y su músculo no se comparan con los de la báscula. Toca una fecha para ver las capturas, corregir o eliminar.</p>
       ${pick && html`<${Sheet} title=${`Registros del ${fmtDay(pick.date)}`} onClose=${() => setPick(null)}>
         <div class="picker-list">${pick.entries.map((e) => html`<button class="pick" style="grid-template-columns:1fr auto" onClick=${() => { setPick(null); open({ entry: e }); }}>
           <div><b>${MEASURE_TYPES[e.tipo] || e.tipo}</b><div class="xs muted">${Object.keys(e.valores || {}).length} valores${e.notas ? ` · ${e.notas}` : ''}</div></div><${Icon} name="chevron" /></button>`)}</div>
@@ -301,7 +301,7 @@ export function BodyView() {
       ${tab === 'medidas' ? html`<${Measures} list=${st.measurements} open=${setSheet} />` : html`<${Nutrition} list=${st.nutrition} open=${setSheet} />`}
       <section class="panel stack-sm small">
         <span class="eyebrow">Cada cuánto</span>
-        <p>Báscula o Samsung Watch: 1 vez por semana, mismo día y en ayunas. Antropometría ISAK: cada 4 a 8 semanas. Fitia: la captura del día al acostarte y, al cerrar la semana, la del Score nutricional.</p>
+        <p>Báscula: 1 vez por semana, mismo día y en ayunas. Antropometría ISAK: cada 4 a 8 semanas. Fitia: la captura del día al acostarte y, al cerrar la semana, la del Score nutricional.</p>
       </section>
       ${sheet && html`<${EntrySheet} kind=${sheet.kind || kind} entry=${sheet.entry} weekly=${sheet.weekly} onClose=${() => setSheet(null)} />`}
     </div>`;

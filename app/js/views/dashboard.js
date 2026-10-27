@@ -90,16 +90,16 @@ export function DashboardView({ go }) {
   const exById = Object.fromEntries(st.exercises.map((e) => [e.id, e]));
   const prs = useMemo(() => recentPRs(done, 5), [done]);
 
-  // Cada dato de una sola fuente: peso de la báscula; grasa y músculo del reloj. Mezclarlas no es comparable.
+  // Cada dato de una sola fuente, la báscula. El Samsung Watch (hasta oct. 2026) daba otra escala de grasa y músculo.
   const bodyPts = (key, tipo) => {
     let rows = meas.filter((x) => x.valores?.[key] != null);
     if (tipo && rows.some((x) => x.tipo === tipo)) rows = rows.filter((x) => x.tipo === tipo);
     const byDay = new Map(); for (const x of rows) byDay.set(x.date, Number(x.valores[key]));
     return [...byDay.entries()].slice(-12).map(([d, y]) => ({ x: fmtShort(d), y }));
   };
-  const pesoPts = bodyPts('peso', 'bioimpedancia'); const grasaPts = bodyPts('grasaPct', 'reloj');
-  const muscKey = meas.some((x) => x.valores?.musculoEsqueletico != null) ? 'musculoEsqueletico' : 'masaMuscular';
-  const muscPts = bodyPts(muscKey, 'reloj');
+  const pesoPts = bodyPts('peso', 'bioimpedancia'); const grasaPts = bodyPts('grasaPct', 'bioimpedancia');
+  const muscKey = 'masaMuscular';
+  const muscPts = bodyPts(muscKey, 'bioimpedancia');
   const sortedMuscles = MUSCLES.map((x) => MUSCLE[x.id]).sort((a, b) => (week[b.id] / (b.max || 1)) - (week[a.id] / (a.max || 1)));
 
   return html`
@@ -188,7 +188,7 @@ export function DashboardView({ go }) {
               ${grasaPts.length ? html`<${LineChart} series=${[{ name: 'Grasa %', points: grasaPts }]} unit="%" />` : null}
               ${muscPts.length ? html`<${LineChart} series=${[{ name: 'Masa muscular', points: muscPts }]} />` : null}
             </div>
-          </div>` : html`<div class="empty"><p>Sube una captura de tu antropometría, báscula o Samsung Health y Claude extrae los valores.</p><button class="btn" onClick=${() => go('cuerpo')}><${Icon} name="camera" /> Subir primera medida</button></div>`}
+          </div>` : html`<div class="empty"><p>Sube una captura de la báscula o de tu antropometría y Claude extrae los valores.</p><button class="btn" onClick=${() => go('cuerpo')}><${Icon} name="camera" /> Subir primera medida</button></div>`}
       </section>
 
       <section class="section">

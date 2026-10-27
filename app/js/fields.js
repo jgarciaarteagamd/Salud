@@ -2,9 +2,11 @@
 export const MEASURE_TYPES = {
   antropometria: 'Antropometría',
   bioimpedancia: 'Bioimpedancia (báscula)',
-  reloj: 'Samsung Watch',
+  reloj: 'Samsung Watch (hasta oct. 2026)',
   manual: 'Registro manual',
 };
+// Desde octubre de 2026 la báscula es la única bioimpedancia; los registros del Samsung Watch quedan como historial.
+export const MEASURE_TYPES_NEW = ['bioimpedancia', 'antropometria', 'manual'];
 
 export const MEASURE_GROUPS = [
   {
@@ -164,7 +166,7 @@ export const WEEKLY_GROUPS = [
 export const WEEKLY_FIELDS = WEEKLY_GROUPS.flatMap((g) => g.fields);
 export const isWeekly = (n) => n?.periodo === 'semana';
 
-// Actividades de cardio (natación, caminata, bicicleta…), normalmente desde Samsung Health.
+// Actividades de cardio (natación, caminata, bicicleta…), normalmente desde la app Salud del iPhone (Apple Watch).
 export const ACTIVITY_TYPES = {
   natacion: 'Natación',
   caminata: 'Caminata',
@@ -177,8 +179,9 @@ export const ACTIVITY_FIELDS = [
   { key: 'distancia', label: 'Distancia', unit: 'm' },
   { key: 'duracionMin', label: 'Duración total', unit: 'min' },
   { key: 'activoMin', label: 'Tiempo en movimiento', unit: 'min' },
-  { key: 'fcMedia', label: 'FC media', unit: 'lpm' },
+  { key: 'fcMin', label: 'FC mínima', unit: 'lpm' },
   { key: 'fcMax', label: 'FC máxima', unit: 'lpm' },
+  { key: 'fcMedia', label: 'FC media', unit: 'lpm' },
   { key: 'kcal', label: 'Calorías', unit: 'kcal' },
   { key: 'pasos', label: 'Pasos', unit: '' },
   { key: 'brazadas', label: 'Brazadas', unit: '' },
@@ -199,16 +202,13 @@ export const fmtClock = (secs) => {
 };
 export const paceLabel = (a) => { const p = activityPace(a); return p == null ? null : `${fmtClock(p)} /${a.tipo === 'natacion' ? '100 m' : 'km'}`; };
 
-// Prioridad cuando un mismo valor viene de varias fuentes el mismo día:
-// el reloj (Samsung Health) es la referencia; luego báscula, cinta y registro manual.
-export const SOURCE_PRIORITY = ['reloj', 'bioimpedancia', 'antropometria', 'manual'];
+// Prioridad cuando un mismo valor viene de varias fuentes el mismo día: la báscula es la referencia;
+// luego la cinta, el registro manual y, al final, el Samsung Watch (ya no se usa; su grasa y su músculo
+// no son comparables con los de la báscula).
+export const SOURCE_PRIORITY = ['bioimpedancia', 'antropometria', 'manual', 'reloj'];
 export const SOURCE_SHORT = { reloj: 'Reloj', bioimpedancia: 'Báscula', antropometria: 'Cinta', manual: 'Manual' };
-// Excepciones por dato: el peso y el IMC se toman de la báscula. El resto (grasa corporal, masa libre de grasa,
-// metabolismo basal…) sigue la prioridad general, con el reloj primero.
-export const FIELD_PRIORITY = {
-  peso: ['bioimpedancia', 'reloj', 'antropometria', 'manual'],
-  imc: ['bioimpedancia', 'reloj', 'antropometria', 'manual'],
-};
+// Excepciones por dato (ninguna por ahora): { clave: [orden de fuentes] }.
+export const FIELD_PRIORITY = {};
 const rankFor = (key, t) => { const order = FIELD_PRIORITY[key] || SOURCE_PRIORITY; const i = order.indexOf(t); return i < 0 ? order.length : i; };
 const rank = (t) => rankFor(null, t);
 

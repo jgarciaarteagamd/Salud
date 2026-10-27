@@ -67,7 +67,7 @@ function sessionLine(s) {
   }
   const post = s.post ? ` · post: RPE ${s.post.rpe ?? '?'}, dolor rodilla ${s.post.dolorRodilla ?? '?'}/10, espalda ${s.post.dolorEspalda ?? '?'}/10${s.post.notas ? `, "${s.post.notas}"` : ''}` : '';
   const rel = (s.relojes || (s.reloj ? [s.reloj] : [])).filter((r) => !r.pendiente);
-  const watch = rel.length ? ` · reloj: ${rel.map((r) => `${r.parte && r.parte !== 'sesion' ? `${r.parte} ` : ''}${[r.actividad, r.duracionMin && `${fmtNum(r.duracionMin, 0)} min`, r.kcal && `${r.kcal} kcal`, r.fcMedia && `FC media ${r.fcMedia}`, r.fcMax && `FC máx ${r.fcMax}`, r.zonasFC].filter(Boolean).join(', ')}`).join(' | ')}` : '';
+  const watch = rel.length ? ` · reloj: ${rel.map((r) => `${r.parte && r.parte !== 'sesion' ? `${r.parte} ` : ''}${[r.actividad, r.duracionMin && `${fmtNum(r.duracionMin, 0)} min`, r.kcal && `${r.kcal} kcal`, r.fcMedia && `FC media ${r.fcMedia}`, r.fcMin && r.fcMax ? `FC ${r.fcMin}-${r.fcMax}` : r.fcMax && `FC máx ${r.fcMax}`, r.zonasFC].filter(Boolean).join(', ')}`).join(' | ')}` : '';
   return `${s.date} — ${s.lugar === 'freeletics' ? '[Freeletics en casa] ' : ''}${s.title || 'Sesión'}${post}${watch}\n${parts.join('\n')}`;
 }
 
@@ -77,7 +77,7 @@ function measurementsBlock(measurements, limit = 4) {
   return days.map((d) => {
     const vals = MEASURE_FIELDS.filter((f) => d.valores[f.key] != null).map((f) => `${f.label} ${d.valores[f.key]}${f.unit ? ` ${f.unit}` : ''} [${SOURCE_SHORT[d.fuente[f.key]] || d.fuente[f.key]}]`).join(', ');
     return `${d.date}: ${vals}`;
-  }).join('\n') + '\n(Grasa corporal, masa libre de grasa, metabolismo basal y músculo: el reloj es la referencia; peso e IMC, la báscula. Las dos no son comparables entre sí.)';
+  }).join('\n') + '\n(La báscula de bioimpedancia es la referencia para todo. Hasta octubre de 2026 también hubo registros del Samsung Watch [Reloj]: su grasa (~23-26 %) y su músculo esquelético no son comparables con los de la báscula (~16 %), así que no mezcles las dos fuentes al ver tendencias.)';
 }
 
 function nutritionBlock(nutrition) {
@@ -212,7 +212,7 @@ HISTORIAL RECIENTE (más reciente primero)
 Los ejercicios OMITIDOS, SUSTITUIDOS o AGREGADOS muestran lo que pasó realmente en el gimnasio: máquinas ocupadas, falta de tiempo, molestias o tiempo extra. Úsalo para ajustar: si una máquina suele estar ocupada, ofrece la alternativa; si se omite por tiempo, ajusta el volumen; si hubo dolor, baja la carga o cambia el ejercicio.
 ${history}
 
-CARDIO Y OTRAS ACTIVIDADES (Samsung Health; no cuentan como series de fuerza, pero sí como fatiga)
+CARDIO Y OTRAS ACTIVIDADES (reloj; no cuentan como series de fuerza, pero sí como fatiga)
 ${activitiesBlock(activities)}
 
 MEDIDAS CORPORALES RECIENTES
@@ -288,14 +288,13 @@ export async function extractMeasurements(files, hint, { signal } = {}) {
   const sample = await getSample();
   if (!sample) throw { code: 'not_granted' };
   const keys = MEASURE_FIELDS.map((f) => `${f.key} = ${f.label} (${f.unit || 'sin unidad'})`).join('\n');
-  const prompt = `Estas imágenes son capturas de un informe de medidas corporales (${hint || 'antropometría, báscula de bioimpedancia o Samsung Health/Samsung Watch'}).
+  const prompt = `Estas imágenes son capturas de un informe de medidas corporales (${hint || 'antropometría o báscula de bioimpedancia'}).
 Extrae los valores numéricos que aparezcan. Usa estas claves cuando el dato corresponda:
 ${keys}
 Fíjate en la unidad de cada dato y usa la clave que corresponde a esa unidad: "Músculo esquelético" en kg → musculoEsqueletico, en % → musculoEsqPct; "Agua corporal" en % → aguaPct, en kg o L → aguaKg; "Peso sin grasa" o "masa libre de grasa" → masaMagra; "Grasa subcutánea" o "índice de grasa subcutánea" → grasaSubcutanea; "Masa grasa" o "grasa corporal" en kg → masaGrasa; "TMB" o "tasa metabólica basal" → tmb; "Proteína" en % → proteinaPct.
 Copia el valor tal como aparece (no lo calcules a partir de otros). Convierte solo lb→kg e in→cm. No inventes valores que no se vean. Lo que no tenga clave (p. ej. "Tipo de cuerpo") va en "otros".
-En Samsung Health ("Tu composición corporal"), "Masa muscular" es la masa muscular esquelética: va en musculoEsqueletico, no en masaMuscular.
-"tipo": "reloj" si la captura es de Samsung Health / Galaxy Watch (composición corporal del reloj); "bioimpedancia" si es la app de una báscula; "antropometria" si es un informe con pliegues o perímetros.
-Responde SOLO con JSON: {"fecha": "AAAA-MM-DD o null", "tipo": "antropometria|bioimpedancia|reloj", "valores": {"peso": 78.4}, "otros": [{"nombre": "...", "valor": 1.2, "unidad": "..."}], "resumen": "1 frase de lo más relevante"}`;
+"tipo": "bioimpedancia" si es la app de una báscula (o la app Salud del iPhone mostrando datos de la báscula); "antropometria" si es un informe con pliegues o perímetros.
+Responde SOLO con JSON: {"fecha": "AAAA-MM-DD o null", "tipo": "antropometria|bioimpedancia", "valores": {"peso": 78.4}, "otros": [{"nombre": "...", "valor": 1.2, "unidad": "..."}], "resumen": "1 frase de lo más relevante"}`;
   return sample.json(prompt + SPLIT_NOTE, { images: await prepareImages(files), modelTier: 'default', cache: false, signal });
 }
 
@@ -316,17 +315,41 @@ Responde SOLO con JSON: {"fecha": "AAAA-MM-DD o null", "fechaFin": "AAAA-MM-DD o
   return sample.json(prompt + SPLIT_NOTE, { images: await prepareImages(files), modelTier: 'default', cache: false, signal });
 }
 
+// Captura de la app Salud del iPhone (Apple Watch). "Datos de Entrenos" muestra la lista de entrenos del día
+// (nombre, minutos y kcal de cada uno) y la FC mínima y máxima solo del último entreno.
+const APPLE_NOTE = `Si es la pantalla "Datos de Entrenos" de la app Salud del iPhone:
+- La tarjeta "Entrenos" lista los entrenos del día, normalmente del más reciente al más antiguo, con minutos y kcal de cada uno.
+- La tarjeta "Frecuencia cardiaca: entreno" es SOLO del último entreno (el más reciente): su MÍN. va en fcMin y su MÁX. en fcMax; la primera hora del eje es su hora de inicio. Reconócelo también porque el tiempo del eje coincide con su duración. Los demás entrenos quedan sin FC.
+- No uses el total de kcal del día como si fuera un entreno.`;
+
 export async function extractActivity(files, { signal } = {}) {
   const sample = await getSample();
   if (!sample) throw { code: 'not_granted' };
   const keys = ACTIVITY_FIELDS.map((f) => `${f.key} = ${f.label} (${f.unit || 'número'})`).join('\n');
-  const prompt = `Estas imágenes son capturas de una actividad registrada en Samsung Health (Galaxy Watch) u otra app de reloj: natación, caminata, carrera, bicicleta, circuito, máquinas de musculación, etc.
+  const prompt = `Estas imágenes son capturas de una actividad registrada con el reloj (app Salud o Fitness del iPhone con Apple Watch, o Samsung Health en registros antiguos): natación, caminata, carrera, bicicleta, elíptica, etc.
 Extrae los datos. Claves de "valores":
 ${keys}
 Convierte la duración a minutos con decimales (46:56 = 46.93). "activoMin" es el tiempo en movimiento si aparece, o calcúlalo con el ritmo medio y la distancia. Distancia en metros.
 Si hay una tabla de largos o vueltas (splits), copia cada fila en "largos" con el tiempo y el descanso tal como aparecen.
+${APPLE_NOTE}
+Si la captura muestra varios entrenos, toma el de cardio (natación, caminata, carrera, bicicleta, elíptica…); si hay más de uno, el más reciente, y nombra los demás en "resumen".
 Usa el año ${new Date().getFullYear()} si la captura no lo muestra. No inventes valores que no se vean.
-Responde SOLO con JSON: {"fecha": "AAAA-MM-DD o null", "hora": "HH:MM o null", "actividad": "nombre tal como aparece (p. ej. Piscina, Circuito entrenamiento, Máquinas de musculación)", "tipo": "${Object.keys(ACTIVITY_TYPES).join('|')}", "lugar": "Piscina, Parque… o null", "valores": {"distancia": 550, "duracionMin": 46.93}, "ritmo": "texto del ritmo medio o null", "largos": [{"n": 1, "distancia": 25, "tiempo": "00:52.3", "ritmo": "03'29\\"", "descanso": "00:23.1 o null", "estilo": "Libre"}], "zonasFC": "resumen de las zonas de FC o null", "dispositivo": "Galaxy Watch6 o null", "resumen": "1 frase"}`;
+Responde SOLO con JSON: {"fecha": "AAAA-MM-DD o null", "hora": "HH:MM o null", "actividad": "nombre tal como aparece (p. ej. Elíptica, Natación en piscina, Caminata)", "tipo": "${Object.keys(ACTIVITY_TYPES).join('|')}", "lugar": "Piscina, Parque… o null", "valores": {"duracionMin": 6, "kcal": 36.8, "fcMin": 80, "fcMax": 119}, "ritmo": "texto del ritmo medio o null", "largos": [{"n": 1, "distancia": 25, "tiempo": "00:52.3", "ritmo": "03'29\\"", "descanso": "00:23.1 o null", "estilo": "Libre"}], "zonasFC": "resumen de las zonas de FC o null", "dispositivo": "Apple Watch o null", "resumen": "1 frase"}`;
+  return sample.json(prompt + SPLIT_NOTE, { images: await prepareImages(files), modelTier: 'default', cache: false, signal });
+}
+
+// Entrenos de una sesión de gimnasio: una captura puede traer varios (elíptica, fuerza, enfriamiento…).
+export async function extractWorkouts(files, { signal } = {}) {
+  const sample = await getSample();
+  if (!sample) throw { code: 'not_granted' };
+  const prompt = `Estas imágenes son capturas de los entrenos registrados con el reloj durante una sesión de gimnasio (app Salud o Fitness del iPhone con Apple Watch, o Samsung Health en registros antiguos).
+Extrae CADA entreno por separado.
+${APPLE_NOTE}
+Convierte la duración a minutos con decimales (46:56 = 46.93). Copia las kcal tal como aparecen (26,3 → 26.3).
+Si la captura muestra un solo entreno con más detalle (FC media, zonas, kcal activas y totales), usa las kcal activas y copia la FC media en fcMedia.
+Devuelve los entrenos en orden cronológico (el primero que se hizo, primero). No inventes valores que no se vean: deja null lo que falte (por ejemplo la FC de los entrenos que no son el último, o la hora).
+Usa el año ${new Date().getFullYear()} si la captura no lo muestra.
+Responde SOLO con JSON: {"fecha": "AAAA-MM-DD o null", "entrenos": [{"actividad": "nombre tal como aparece (p. ej. Elíptica, Ejercicios de fuerza con máquinas, Enfriamiento)", "hora": "HH:MM o null", "duracionMin": 45, "kcal": 167, "fcMin": null, "fcMax": null, "fcMedia": null, "zonasFC": "resumen de las zonas de FC o null"}], "dispositivo": "Apple Watch o null", "resumen": "1 frase"}`;
   return sample.json(prompt + SPLIT_NOTE, { images: await prepareImages(files), modelTier: 'default', cache: false, signal });
 }
 
