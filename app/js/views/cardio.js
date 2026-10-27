@@ -103,8 +103,8 @@ export function ActivitySheet({ entry, onClose }) {
       </div>
 
       <div class="panel stack-sm">
-        <span class="eyebrow">Capturas de la app Salud</span>
-        <p class="small muted">Sube “Datos de Entrenos” de la app Salud del iPhone (o el resumen del entreno en la app Fitness, si tiene distancia o largos). Claude la lee y rellena el formulario; revisa y guarda.</p>
+        <span class="eyebrow">Capturas de Fitness o Salud</span>
+        <p class="small muted">Sube la tarjeta del entreno en la app Fitness del iPhone (y, si quieres, su detalle con FC, largos o ritmo). También sirve “Datos de Entrenos” de la app Salud. Claude la lee y rellena el formulario; revisa y guarda.</p>
         <${FilePick} id="ac-files" count=${files.length} onPick=${(fl) => { const sel = fl.slice(0, imgCaps?.maxCount || 6); setFiles(sel); setErr(''); if (sel.length) read(sel); }} />
         ${previews.length ? html`<div class="thumbs">${previews.map((u) => html`<img src=${u} alt="Captura seleccionada" />`)}</div>` : null}
         ${entry?.imagenes?.length ? html`<div class="thumbs">${entry.imagenes.map((id) => html`<img src=${assetUrl(id)} alt="Captura guardada" />`)}</div>` : null}

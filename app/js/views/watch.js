@@ -1,7 +1,7 @@
 // Datos del reloj para una sesión de Forus o Freeletics. Una sesión puede tener varios registros del reloj
 // (p. ej. "Elíptica", "Ejercicios de fuerza con máquinas" y "Enfriamiento"): cada uno con duración y calorías.
-// Vienen de la pantalla "Datos de Entrenos" de la app Salud del iPhone, que muestra todos los entrenos del día
-// en una sola captura y la FC mínima y máxima solo del último. Los registros antiguos (Samsung Health)
+// Vienen de la app Fitness del iPhone (una tarjeta por entreno, con el tiempo exacto) o de "Datos de Entrenos"
+// en la app Salud (todos los entrenos del día en una captura y la FC mínima y máxima solo del último). Los registros antiguos (Samsung Health)
 // traen además FC media y zonas.
 import { uploadImage, canUpload, assetUrl, blobsFromAssets } from '../store.js';
 import { extractWorkouts, imageLimits, errorCopy } from '../ai.js';
@@ -63,11 +63,20 @@ function toRecord(e) {
   for (const f of FIELDS) if (num(e?.[f.key]) != null) rec[f.key] = num(e[f.key]);
   return rec;
 }
-const sameWorkout = (a, b) => (a.actividad || '').toLowerCase() === (b.actividad || '').toLowerCase()
-  && Math.round(num(a.duracionMin) || 0) === Math.round(num(b.duracionMin) || 0);
+// Mismo entreno visto en dos capturas (Fitness y Salud): el nombre puede venir cortado ("con máquin") y
+// el tiempo redondeado (Salud dice 45 min; Fitness, 44:42).
+const normName = (t) => (t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[.…]+$/, '').trim();
+const sameWorkout = (a, b) => {
+  const x = normName(a.actividad); const y = normName(b.actividad);
+  if (!x || !y || !(x.startsWith(y) || y.startsWith(x))) return false;
+  const da = num(a.duracionMin); const db = num(b.duracionMin);
+  return da == null || db == null || Math.abs(da - db) < 1;
+};
+const decimals = (v) => (String(v).split('.')[1] || '').length;
 
-// Suma los entrenos leídos a la lista. Si un entreno ya estaba (otra captura de la misma pantalla),
-// solo completa los datos que le faltaban, como la FC del último entreno.
+// Suma los entrenos leídos a la lista. Si un entreno ya estaba (otra captura), completa los datos que le
+// faltaban (como la FC del último entreno) y se queda con el valor más preciso: 44:42 antes que 45 min,
+// 36,8 kcal antes que 36.
 function mergeWorkouts(list, recs, imagenes, dispositivo) {
   let next = [...list]; let added = 0;
   for (const r of recs) {
@@ -75,7 +84,13 @@ function mergeWorkouts(list, recs, imagenes, dispositivo) {
     const i = next.findIndex((x) => !x.pendiente && sameWorkout(x, r));
     if (i >= 0) {
       const cur = next[i]; const upd = { ...cur };
-      for (const [k, v] of Object.entries(r)) if (v !== '' && v != null && (cur[k] == null || cur[k] === '')) upd[k] = v;
+      for (const [k, v] of Object.entries(r)) {
+        if (v === '' || v == null) continue;
+        if (cur[k] == null || cur[k] === '') upd[k] = v;
+        else if (k === 'actividad' && v.length > cur[k].length) upd[k] = v;
+        else if (FIELDS.some((f) => f.key === k) && decimals(v) > decimals(cur[k])) upd[k] = v;
+      }
+      upd.imagenes = [...new Set([...(cur.imagenes || []), ...imagenes])];
       next = next.map((x, j) => (j === i ? upd : x));
       continue;
     }
@@ -157,7 +172,7 @@ function WatchSheet({ value, existing, onSave, onReplace, onDelete, onClose }) {
   return html`
     <${Sheet} title=${value ? 'Registro del reloj' : 'Agregar registro del reloj'} onClose=${() => { ctl.current?.abort(); onClose(); }}>
       <div class="panel stack-sm">
-        <p class="small muted">Captura de “Datos de Entrenos” en la app Salud del iPhone. Claude la lee y rellena el formulario; revisa y guarda. Si trae varios entrenos, crea un registro por cada uno.</p>
+        <p class="small muted">Tarjeta del entreno en la app Fitness del iPhone (o “Datos de Entrenos” en la app Salud). Claude la lee y rellena el formulario; revisa y guarda. Si la captura trae varios entrenos, crea un registro por cada uno.</p>
         <${FilePick} id="w-files" count=${files.length} onPick=${(fl) => { const sel = fl.slice(0, imgCaps?.maxCount || 4); setFiles(sel); setErr(''); if (sel.length) read(sel); }} />
         ${previews.length ? html`<div class="thumbs">${previews.map((u) => html`<img src=${u} alt="Captura seleccionada" />`)}</div>` : null}
         ${saved.length ? html`<div class="thumbs">${saved.map((id) => html`<img src=${assetUrl(id)} alt="Captura guardada" />`)}</div>` : null}
@@ -173,7 +188,7 @@ function WatchSheet({ value, existing, onSave, onReplace, onDelete, onClose }) {
         ${FIELDS.map((f) => html`<label class="field"><span>${f.label} (${f.unit})</span><input id=${'w-' + f.key} class="input num" inputmode="decimal" value=${vals[f.key]} onInput=${(e) => setVals({ ...vals, [f.key]: e.target.value })} /></label>`)}
       </div>
       ${extra.zonasFC || value?.zonasFC ? html`<label class="field"><span>Zonas de FC</span><input id="w-zones" class="input" value=${extra.zonasFC} onInput=${(e) => setExtra({ ...extra, zonasFC: e.target.value })} /></label>` : null}
-      <p class="xs muted">La app Salud muestra la FC mínima y máxima solo del último entreno. Si quieres la de cada parte, haz la captura al terminar cada una.</p>
+      <p class="xs muted">Para la FC, abre el entreno en Fitness (FC media y gráfica) o usa “Datos de Entrenos” en Salud, que la muestra solo del último.</p>
       ${err && html`<p class="small" style="color:var(--bad)">${err}</p>`}
       <div class="row">
         <button class="btn btn-primary" disabled=${busy === 'save'} onClick=${save}>${busy === 'save' ? 'Guardando…' : 'Guardar'}</button>
@@ -241,7 +256,7 @@ export function WatchPanel({ session, onSave }) {
             <span class="xs muted num">${r.pendiente ? 'Captura guardada sin leer: tócala para leerla con Claude' : `${r.hora ? `${r.hora} · ` : ''}${summary(r)}`}</span></span>
           <${Icon} name="chevron" />
         </button>`)}</div>`
-      : html`<p class="small muted">Al terminar, abre la app Salud del iPhone → “Datos de Entrenos” y elige la captura. Claude crea un registro por cada entreno (elíptica, fuerza, enfriamiento…) y le pone la FC al último.</p>`}
+      : html`<p class="small muted">Al terminar, elige las capturas de tus entrenos en la app Fitness del iPhone (una por entreno: elíptica, calentamiento, fuerza, enfriamiento…), todas a la vez. Claude crea un registro por entreno. También sirve “Datos de Entrenos” de la app Salud, que agrega la FC del último.</p>`}
       ${open && html`<${WatchSheet} value=${open.index >= 0 ? list[open.index] : null} existing=${list.filter((_, j) => j !== open.index)}
         onSave=${(r) => save(open.index >= 0 ? list.map((x, j) => (j === open.index ? r : x)) : [...list, r])}
         onReplace=${(rest) => save(rest)}

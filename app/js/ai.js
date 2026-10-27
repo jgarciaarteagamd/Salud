@@ -315,9 +315,14 @@ Responde SOLO con JSON: {"fecha": "AAAA-MM-DD o null", "fechaFin": "AAAA-MM-DD o
   return sample.json(prompt + SPLIT_NOTE, { images: await prepareImages(files), modelTier: 'default', cache: false, signal });
 }
 
-// Captura de la app Salud del iPhone (Apple Watch). "Datos de Entrenos" muestra la lista de entrenos del día
+// Capturas del Apple Watch. En la app Fitness cada tarjeta es un entreno (nombre, kcal activas y tiempo total
+// o distancia; al abrirlo, más detalle). En la app Salud, "Datos de Entrenos" muestra la lista de entrenos del día
 // (nombre, minutos y kcal de cada uno) y la FC mínima y máxima solo del último entreno.
-const APPLE_NOTE = `Si es la pantalla "Datos de Entrenos" de la app Salud del iPhone:
+const APPLE_NOTE = `Si es de la app Fitness del iPhone:
+- Cada tarjeta es un entreno: el nombre (puede verse cortado, p. ej. "Ejercicios de fuerza con máquin": cópialo tal como se ve, sin completarlo), "Kilocalorías activas" → kcal, "Tiempo total" o "Tiempo de entrenamiento" → duracionMin, "Distancia" → distancia en metros.
+- El tiempo va en minutos:segundos ("06:45" = 6.75 min, "44:42" = 44.7 min) o, desde una hora, en horas:minutos:segundos ("1:02:10" = 62.17 min).
+- En el detalle de un entreno, si aparecen: "Frecuencia cardiaca media" → fcMedia, el rango de la gráfica de FC → fcMin y fcMax, "Largos" y "Tamaño de piscina" → largoPiscina, la hora de inicio → hora. Para kcal usa siempre las activas, no las totales.
+Si es la pantalla "Datos de Entrenos" de la app Salud del iPhone:
 - La tarjeta "Entrenos" lista los entrenos del día, normalmente del más reciente al más antiguo, con minutos y kcal de cada uno.
 - La tarjeta "Frecuencia cardiaca: entreno" es SOLO del último entreno (el más reciente): su MÍN. va en fcMin y su MÁX. en fcMax; la primera hora del eje es su hora de inicio. Reconócelo también porque el tiempo del eje coincide con su duración. Los demás entrenos quedan sin FC.
 - No uses el total de kcal del día como si fuera un entreno.`;
@@ -326,7 +331,7 @@ export async function extractActivity(files, { signal } = {}) {
   const sample = await getSample();
   if (!sample) throw { code: 'not_granted' };
   const keys = ACTIVITY_FIELDS.map((f) => `${f.key} = ${f.label} (${f.unit || 'número'})`).join('\n');
-  const prompt = `Estas imágenes son capturas de una actividad registrada con el reloj (app Salud o Fitness del iPhone con Apple Watch, o Samsung Health en registros antiguos): natación, caminata, carrera, bicicleta, elíptica, etc.
+  const prompt = `Estas imágenes son capturas de una actividad registrada con el reloj (app Fitness o Salud del iPhone con Apple Watch, o Samsung Health en registros antiguos): natación, caminata, carrera, bicicleta, elíptica, etc.
 Extrae los datos. Claves de "valores":
 ${keys}
 Convierte la duración a minutos con decimales (46:56 = 46.93). "activoMin" es el tiempo en movimiento si aparece, o calcúlalo con el ritmo medio y la distancia. Distancia en metros.
@@ -342,15 +347,14 @@ Responde SOLO con JSON: {"fecha": "AAAA-MM-DD o null", "hora": "HH:MM o null", "
 export async function extractWorkouts(files, { signal } = {}) {
   const sample = await getSample();
   if (!sample) throw { code: 'not_granted' };
-  const prompt = `Estas imágenes son capturas de los entrenos registrados con el reloj durante una sesión de gimnasio (app Salud o Fitness del iPhone con Apple Watch, o Samsung Health en registros antiguos).
-Extrae CADA entreno por separado.
+  const prompt = `Estas imágenes son capturas de los entrenos registrados con el reloj durante una sesión de gimnasio (app Fitness o Salud del iPhone con Apple Watch, o Samsung Health en registros antiguos).
+Extrae CADA entreno por separado. Varias imágenes pueden ser tarjetas de entrenos distintos (una por entreno) o partes de una misma captura larga: si el mismo entreno aparece dos veces, devuélvelo una sola vez.
 ${APPLE_NOTE}
 Convierte la duración a minutos con decimales (46:56 = 46.93). Copia las kcal tal como aparecen (26,3 → 26.3).
-Si la captura muestra un solo entreno con más detalle (FC media, zonas, kcal activas y totales), usa las kcal activas y copia la FC media en fcMedia.
 Devuelve los entrenos en orden cronológico (el primero que se hizo, primero). No inventes valores que no se vean: deja null lo que falte (por ejemplo la FC de los entrenos que no son el último, o la hora).
 Usa el año ${new Date().getFullYear()} si la captura no lo muestra.
-Responde SOLO con JSON: {"fecha": "AAAA-MM-DD o null", "entrenos": [{"actividad": "nombre tal como aparece (p. ej. Elíptica, Ejercicios de fuerza con máquinas, Enfriamiento)", "hora": "HH:MM o null", "duracionMin": 45, "kcal": 167, "fcMin": null, "fcMax": null, "fcMedia": null, "zonasFC": "resumen de las zonas de FC o null"}], "dispositivo": "Apple Watch o null", "resumen": "1 frase"}`;
-  return sample.json(prompt + SPLIT_NOTE, { images: await prepareImages(files), modelTier: 'default', cache: false, signal });
+Responde SOLO con JSON: {"fecha": "AAAA-MM-DD o null", "entrenos": [{"actividad": "nombre tal como aparece (p. ej. Elíptica, Ejercicios de fuerza con máquinas, Enfriamiento)", "hora": "HH:MM o null", "duracionMin": 44.7, "kcal": 167, "fcMin": null, "fcMax": null, "fcMedia": null, "zonasFC": "resumen de las zonas de FC o null"}], "dispositivo": "Apple Watch o null", "resumen": "1 frase"}`;
+  return sample.json(prompt, { images: await prepareImages(files), modelTier: 'default', cache: false, signal });
 }
 
 /* ---------- resumen para el proyecto Mi Salud ---------- */
